@@ -1,12 +1,12 @@
 defmodule Oasis.MixProject do
   use Mix.Project
 
-  @source_url "https://github.com/elixir-oasis/oasis"
+  @source_url "https://github.com/xinz/oasis"
 
   def project do
     [
       app: :oasis,
-      version: "0.5.1",
+      version: "0.5.2",
       elixir: "~> 1.10",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
