@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.5.2 (2025-02-02)
+
+* Fix compile warning in Elixir 1.18
+* Fix the broken source url in `mix.exs`
+
 ## v0.5.1 (2023-02-14)
 
 * Fix to ensure validation and parse working when request header content type with charset ([issue#15](https://github.com/elixir-oasis/oasis/issues/15))
