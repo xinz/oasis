@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.5.2 (2025-02-02)
+## v0.5.2 (2025-02-20)
 
 * Fix compile warning in Elixir 1.18
 * Fix the broken source url in `mix.exs`
