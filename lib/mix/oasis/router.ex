@@ -262,7 +262,7 @@ defmodule Mix.Oasis.Router do
       files
       |> Kernel.++(security_files)
       |> Enum.map(fn(file) ->
-        Tuple.append(file, router)
+        Tuple.insert_at(file, tuple_size(file), router)
       end)
 
     {

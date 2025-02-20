@@ -1,5 +1,5 @@
 defmodule Oasis.Plug.BearerAuthTest do
-  use ExUnit.Case, asysnc: false
+  use ExUnit.Case, async: false
   use Plug.Test
 
   alias Plug.Conn

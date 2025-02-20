@@ -84,6 +84,11 @@ defmodule Oasis.RouterTest do
       resp(conn, 200, Jason.encode!(%{user_id: user_id, group_id: group_id}))
     end
 
+    def handle_errors(conn, %{kind: _kind, reason: reason, stack: _stack}) do
+      message = Map.get(reason, :message) || "Something went wrong"
+      send_resp(conn, conn.status, message)
+    end
+
   end
 
   use ExUnit.Case, async: true

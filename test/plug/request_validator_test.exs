@@ -1,5 +1,5 @@
 defmodule Oasis.Plug.RequestValidatorTest do
-  use ExUnit.Case, asysnc: false
+  use ExUnit.Case, async: false
   use Plug.Test
 
   alias Oasis.Plug.RequestValidator

@@ -3,7 +3,7 @@ defmodule Oasis.HTTPServer do
 
   def start(port) do
     children = [
-      Plug.Adapters.Cowboy.child_spec(
+      Plug.Cowboy.child_spec(
         scheme: :http,
         plug: __MODULE__.PlugRouter,
         options: [
