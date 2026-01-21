@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.6.0 (2025-01-21)
+
+* Fix compile fail `inspect_as_struct` in Elixir 1.19
+* Fix compile warning and test cases in Elixir 1.19
+
 ## v0.5.2 (2025-02-20)
 
 * Fix compile warning in Elixir 1.18
