@@ -1,5 +1,7 @@
 # Oasis
 
+[![hex.pm version](https://img.shields.io/hexpm/v/oasis.svg?v=1)](https://hex.pm/packages/oasis)
+
 [![Coverage Status](https://coveralls.io/repos/github/elixir-oasis/oasis/badge.svg?branch=main)](https://coveralls.io/github/elixir-oasis/oasis?branch=main)
 
 ## Introduction
@@ -25,7 +27,7 @@ Add `oasis` as a dependency to your mix.exs
 ```elixir
 def deps do
   [
-    {:oasis, "~> 0.3"}
+    {:oasis, "~> 0.6"}
   ]
 end
 ```
