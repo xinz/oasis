@@ -58,12 +58,8 @@ defmodule Oasis.Spec.UtilsTest do
 
     {:ok, data} = YamlElixir.read_from_string(yaml_str)
 
-    IO.puts "data: #{inspect(data, pretty: true)}"
-    root = ExJsonSchema.Schema.resolve(data)
-    IO.puts "root after resolved: #{inspect root, pretty: true}"
+    root = ExJsonSchema.Schema.resolve(data) |> Oasis.Spec.Utils.expand_ref()
 
-    root = Oasis.Spec.Utils.expand_ref(root)
-    IO.puts ">> root: #{inspect root, pretty: true}"
     assert root.__struct__ == ExJsonSchema.Schema.Root
 
     schema = root.schema
