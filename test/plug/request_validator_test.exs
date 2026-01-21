@@ -1,6 +1,7 @@
 defmodule Oasis.Plug.RequestValidatorTest do
   use ExUnit.Case, async: false
-  use Plug.Test
+  import Plug.Test
+  import Plug.Conn
 
   alias Oasis.Plug.RequestValidator
 
@@ -27,7 +28,7 @@ defmodule Oasis.Plug.RequestValidatorTest do
       }
 
       assert_raise Oasis.BadRequestError, ~r/Failed to convert parameter/, fn ->
-        conn = 
+        conn =
           conn(:post, "/req_validator", %{"name"=> "test_name", "tag" => "a"})
           |> put_req_header("content-type", "Application/json; charset=utf-8")
         RequestValidator.call(conn, body_schema: body_schema)
@@ -55,7 +56,7 @@ defmodule Oasis.Plug.RequestValidatorTest do
       }
 
       assert_raise Oasis.BadRequestError, ~r/Failed to convert parameter/, fn ->
-        conn = 
+        conn =
           conn(:post, "/req_validator", %{"name"=> "test_name", "tag" => "a"})
           |> put_req_header("content-type", "tExt/PlAin; charset=utf-8")
         RequestValidator.call(conn, body_schema: body_schema)
@@ -83,7 +84,7 @@ defmodule Oasis.Plug.RequestValidatorTest do
       }
 
       assert_raise Oasis.BadRequestError, ~r/Failed to convert parameter/, fn ->
-        conn = 
+        conn =
           conn(:post, "/req_validator", %{"name"=> "test_name", "tag" => "a"})
           |> put_req_header("content-type", "application/x-www-form-urlencoded; charset=utf-8")
         RequestValidator.call(conn, body_schema: body_schema)

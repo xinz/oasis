@@ -92,7 +92,8 @@ defmodule Oasis.RouterTest do
   end
 
   use ExUnit.Case, async: true
-  use Plug.Test
+  import Plug.Test
+  import Plug.Conn
 
   test "declare and call HEAD request" do
     conn = call(Sample, conn(:head, "/head"))

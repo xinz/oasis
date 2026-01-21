@@ -1,9 +1,10 @@
 defmodule Oasis.Plug.BearerAuthTest do
   use ExUnit.Case, async: false
-  use Plug.Test
 
   alias Plug.Conn
 
+  import Plug.Test
+  import Plug.Conn
   import Oasis.Plug.BearerAuth
   import Oasis.Token, only: [sign: 2, random_string: 1]
 
@@ -54,7 +55,7 @@ defmodule Oasis.Plug.BearerAuthTest do
     end
 
   end
-  
+
   describe "bearer_auth" do
     test "missing required :security option" do
       id = 123
@@ -111,7 +112,7 @@ defmodule Oasis.Plug.BearerAuthTest do
 
       token = sign(crypto, id)
 
-      assert_raise Oasis.BadRequestError, ~r/the bearer token is expired/, fn -> 
+      assert_raise Oasis.BadRequestError, ~r/the bearer token is expired/, fn ->
         conn(:get, "/expired")
         |> put_req_header("authorization", "Bearer #{token}")
         |> bearer_auth(security: BearerAuth)
