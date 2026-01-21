@@ -50,6 +50,14 @@ defmodule Mix.Oasis do
       defp inspect_as_struct(map, struct_module_name, opts),
         do: Inspect.Map.inspect(map, struct_module_name, opts)
     end
+
+    if Code.ensure_loaded?(Inspect.Map) and function_exported?(Inspect.Map, :inspect_as_struct, 4) do
+      # above elixir 1.18
+      defp inspect_as_struct(map, struct_module_name, opts) do
+        infos = map |> Map.keys() |> Enum.map(&%{field: &1})
+        Inspect.Map.inspect_as_struct(map, struct_module_name, infos, opts)
+      end
+    end
   end
 
   def new(%{"paths" => paths} = spec, opts) when is_map(paths) do
