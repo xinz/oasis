@@ -4,6 +4,12 @@ defmodule Oasis.Spec.UtilsTest do
   test "expand $ref" do
     yaml_str = """
       components:
+        parameters:
+          ContentQueryParam:
+            name: content
+            in: query
+            schema:
+              $ref: "#/components/schemas/Contents"
         schemas:
           Content:
             type: object
@@ -23,18 +29,21 @@ defmodule Oasis.Spec.UtilsTest do
               $ref: "#/components/schemas/Content"
           Tag:
             type: string
-        pathItems:
-          CommonContent:
-            get:
-              parameters:
-                - name: content
-                  in: query
-                  schema:
-                    $ref: "#/components/schemas/Contents"
       paths:
         /page:
-          $ref: "#/components/pathItems/CommonContent"
+          get:
+            parameters:
+              - $ref: "#/components/parameters/ContentQueryParam"
+            responses:
+              '200':
+                description: callback successfully processed
         /contents:
+          get:
+            parameters:
+              - $ref: "#/components/parameters/ContentQueryParam"
+            responses:
+              '200':
+                description: callback successfully processed
           post:
             requestBody:
               description: Callback payload
@@ -45,14 +54,16 @@ defmodule Oasis.Spec.UtilsTest do
             responses:
               '200':
                 description: callback successfully processed
-          $ref: "#/components/pathItems/CommonContent"
     """
 
     {:ok, data} = YamlElixir.read_from_string(yaml_str)
 
+    IO.puts "data: #{inspect(data, pretty: true)}"
     root = ExJsonSchema.Schema.resolve(data)
+    IO.puts "root after resolved: #{inspect root, pretty: true}"
 
     root = Oasis.Spec.Utils.expand_ref(root)
+    IO.puts ">> root: #{inspect root, pretty: true}"
     assert root.__struct__ == ExJsonSchema.Schema.Root
 
     schema = root.schema
@@ -79,13 +90,11 @@ defmodule Oasis.Spec.UtilsTest do
 
     assert ref_contents == content
 
-    comp_path_items = get_in(schema, ["components", "pathItems"])
+    comp_params = get_in(schema, ["components", "parameters"])
 
-    comp_path_items_params = get_in(comp_path_items, ["CommonContent", "get", "parameters"])
+    content_query_param = get_in(comp_params, ["ContentQueryParam"])
 
-    param = Enum.at(comp_path_items_params, 0)
-
-    assert param["schema"] == %{
+    assert content_query_param["schema"] == %{
              "type" => "array",
              "items" => content
            }
@@ -127,7 +136,7 @@ defmodule Oasis.Spec.UtilsTest do
              content_param["in"] == "query"
   end
 
-  test "duplicated defined object and the referenced object in a path item object" do
+  test "$ref's sibling properties are ignored" do
     yaml_str = """
       components:
         pathItems:
@@ -151,40 +160,12 @@ defmodule Oasis.Spec.UtilsTest do
 
     {:ok, data} = YamlElixir.read_from_string(yaml_str)
 
-    root = ExJsonSchema.Schema.resolve(data)
+    root = ExJsonSchema.Schema.resolve(data) |> Oasis.Spec.Utils.expand_ref()
 
-    assert_raise Oasis.InvalidSpecError, ~r/Defined a duplicated field: `get` key/, fn ->
-      Oasis.Spec.Utils.expand_ref(root)
-    end
-
-    yaml_str = """
-      components:
-        pathItems:
-          Common:
-            get:
-              parameters:
-                - name: lang
-                  in: query
-                  schema:
-                    style: "integer"
-      paths:
-        /test1:
-          get:
-            parameters:
-              - name: l
-                in: query
-                schema:
-                  style: "integer"
-          $ref: "#/components/pathItems/Common"
-    """
-
-    {:ok, data} = YamlElixir.read_from_string(yaml_str)
-
-    root = ExJsonSchema.Schema.resolve(data)
-
-    assert_raise Oasis.InvalidSpecError, ~r/Defined a duplicated field: `get` key/, fn ->
-      Oasis.Spec.Utils.expand_ref(root)
-    end
+    # After upgrade `ex_json_schema` to 0.11.*
+    # If the `$ref` is present, all other sibling properties are ignored after resolved.
+    params = get_in(root.schema, ["paths", "/test1", "get", "parameters"])
+    assert Enum.at(params, 0)["name"] == "lang"
 
     yaml_str = """
       components:
@@ -217,10 +198,9 @@ defmodule Oasis.Spec.UtilsTest do
 
     {:ok, data} = YamlElixir.read_from_string(yaml_str)
 
-    root = ExJsonSchema.Schema.resolve(data)
+    root = ExJsonSchema.Schema.resolve(data) |> Oasis.Spec.Utils.expand_ref()
 
-    assert_raise Oasis.InvalidSpecError, ~r/Defined a duplicated field: `get` key/, fn ->
-      Oasis.Spec.Utils.expand_ref(root)
-    end
+    params = get_in(root.schema, ["paths", "/test1", "get", "parameters"])
+    assert length(params) == 1 and Enum.at(params, 0)["name"] == "lang"
   end
 end
