@@ -465,7 +465,8 @@ defmodule Oasis.ParserTest do
       "file" => %Plug.Upload{
         content_type: "image/png",
         filename: "test.png",
-        path: "/var/folders/c3/_tk3ftrx1x71xkz6xhpsxpzr0000gn/T//plug-1620/multipart-1620803361-660920818442426-3"
+        path:
+          "/var/folders/c3/_tk3ftrx1x71xkz6xhpsxpzr0000gn/T//plug-1620/multipart-1620803361-660920818442426-3"
       }
     }
 

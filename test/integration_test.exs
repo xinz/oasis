@@ -46,7 +46,6 @@ defmodule Oasis.IntegrationTest do
     assert Oasis.Gen.Plug.GetTestHMACWithDate.init(:ok) == :ok
     assert Oasis.Gen.Plug.PostTestHMACWithBody.init(:ok) == :ok
 
-
     assert Oasis.Gen.Plug.TestFilesUpload.init(:ok) == :ok
   end
 
@@ -387,7 +386,8 @@ defmodule Oasis.IntegrationTest do
              |> Finch.request(TestFinch)
 
     assert response.status == 400 and
-             response.body == "Find body parameter `body_request` with error: At /fav_number: Value 0 is less than minimum 1"
+             response.body ==
+               "Find body parameter `body_request` with error: At /fav_number: Value 0 is less than minimum 1"
   end
 
   test "post multipart/formdata", %{url: url} do
@@ -500,15 +500,22 @@ defmodule Oasis.IntegrationTest do
     headers = [{"content-type", "application/json"}]
     body = "[{\"id2\":1,\"name2\":\"hello\"}]"
 
-    assert {:ok, response} = Finch.build(:post, "#{url}/test_post_json", headers, body) |> Finch.request(TestFinch)
+    assert {:ok, response} =
+             Finch.build(:post, "#{url}/test_post_json", headers, body)
+             |> Finch.request(TestFinch)
+
     assert response.status == 400
     assert response.body =~ "Find body parameter `body_request` with error:"
     assert response.body =~ "Missing required properties: id, name"
 
     body = "[{\"id\":1,\"name\":\"hello\"}]"
 
-    assert {:ok, response} = Finch.build(:post, "#{url}/test_post_json", headers, body) |> Finch.request(TestFinch)
+    assert {:ok, response} =
+             Finch.build(:post, "#{url}/test_post_json", headers, body)
+             |> Finch.request(TestFinch)
+
     body = Jason.decode!(response.body)
+
     assert response.status == 200 and
              body["body_params"] == [%{"id" => 1, "name" => "hello"}] and
              body["body_params"] == body["params"]
@@ -516,8 +523,12 @@ defmodule Oasis.IntegrationTest do
     headers = [{"content-type", "application/vnd.api-v1+json"}]
     body = "1"
 
-    assert {:ok, response} = Finch.build(:post, "#{url}/test_post_json", headers, body) |> Finch.request(TestFinch)
+    assert {:ok, response} =
+             Finch.build(:post, "#{url}/test_post_json", headers, body)
+             |> Finch.request(TestFinch)
+
     body = Jason.decode!(response.body)
+
     assert response.status == 200 and
              body["body_params"] == 1 and
              body["body_params"] == body["params"]
@@ -525,8 +536,12 @@ defmodule Oasis.IntegrationTest do
     headers = [{"content-type", "application/vnd.api-v2+json"}]
     body = "1.5"
 
-    assert {:ok, response} = Finch.build(:post, "#{url}/test_post_json", headers, body) |> Finch.request(TestFinch)
+    assert {:ok, response} =
+             Finch.build(:post, "#{url}/test_post_json", headers, body)
+             |> Finch.request(TestFinch)
+
     body = Jason.decode!(response.body)
+
     assert response.status == 200 and
              body["body_params"] == 1.5 and
              body["body_params"] == body["params"]
@@ -539,15 +554,27 @@ defmodule Oasis.IntegrationTest do
     # valid `street_type` is ["Street", "Avenue", "Boulevard"]
     body = "{\"_json\":{\"street_name\":\"S1\", \"street_type\":\"Avenue2\"}}"
 
-    assert {:ok, response} = Finch.build(:post, "#{url}/test_post_json", headers, body) |> Finch.request(TestFinch)
+    assert {:ok, response} =
+             Finch.build(:post, "#{url}/test_post_json", headers, body)
+             |> Finch.request(TestFinch)
+
     assert response.body ==
              "Find body parameter `body_request` with error: At /_json/street_type: Value \"Avenue2\" is not in the allowed list: [\"Street\", \"Avenue\", \"Boulevard\"]"
 
     body = "{\"_json\":{\"street_name\":\"S1\", \"id\":\"1\", \"street_type\":\"Avenue\"}}"
-    assert {:ok, response} = Finch.build(:post, "#{url}/test_post_json", headers, body) |> Finch.request(TestFinch)
+
+    assert {:ok, response} =
+             Finch.build(:post, "#{url}/test_post_json", headers, body)
+             |> Finch.request(TestFinch)
+
     body = Jason.decode!(response.body)
+
     assert response.status == 200 and
-             body["body_params"]["_json"] == %{"street_name" => "S1", "street_type" => "Avenue", "id" => 1} and
+             body["body_params"]["_json"] == %{
+               "street_name" => "S1",
+               "street_type" => "Avenue",
+               "id" => 1
+             } and
              body["body_params"] == body["params"]
   end
 
@@ -590,7 +617,6 @@ defmodule Oasis.IntegrationTest do
     assert %{"id" => 1, "relation_ids" => ["1", "2", "3"]} == body["query_params"]
   end
 
-
   test "missing bearer auth in header", %{url: url} do
     start_supervised!({Finch, name: TestFinch})
 
@@ -599,7 +625,9 @@ defmodule Oasis.IntegrationTest do
     {_, authenticate} = List.keyfind(response.headers, "www-authenticate", 0)
     assert authenticate =~ ~s|Bearer realm=|
     assert authenticate =~ ~s|error=\"invalid_request\"|
-    assert authenticate =~ ~s|error_description=\"the bearer token is missing in the authorization header\"|
+
+    assert authenticate =~
+             ~s|error_description=\"the bearer token is missing in the authorization header\"|
   end
 
   test "verify bearer auth", %{url: url} do
@@ -608,7 +636,8 @@ defmodule Oasis.IntegrationTest do
     headers = [{"content-type", "application/x-www-form-urlencoded"}]
     body = "username=a&password=123"
 
-    {:ok, response} = Finch.build(:post, "#{url}/sign_bearer_auth", headers, body) |> Finch.request(TestFinch)
+    {:ok, response} =
+      Finch.build(:post, "#{url}/sign_bearer_auth", headers, body) |> Finch.request(TestFinch)
 
     assert response.status == 200
     token = Jason.decode!(response.body)["token"]
@@ -621,7 +650,8 @@ defmodule Oasis.IntegrationTest do
     assert id == "abcdef"
 
     # be with an invalid query parameter
-    {:ok, response} = Finch.build(:get, "#{url}/bearer_auth?max_age=hello", headers) |> Finch.request(TestFinch)
+    {:ok, response} =
+      Finch.build(:get, "#{url}/bearer_auth?max_age=hello", headers) |> Finch.request(TestFinch)
 
     assert response.status == 400
   end
@@ -643,7 +673,8 @@ defmodule Oasis.IntegrationTest do
     headers = [{"content-type", "application/x-www-form-urlencoded"}]
     body = "username=a&password=wrong"
 
-    {:ok, response} = Finch.build(:post, "#{url}/sign_bearer_auth", headers, body) |> Finch.request(TestFinch)
+    {:ok, response} =
+      Finch.build(:post, "#{url}/sign_bearer_auth", headers, body) |> Finch.request(TestFinch)
 
     assert response.status == 401
     assert response.body == "Unauthorized"
@@ -651,7 +682,8 @@ defmodule Oasis.IntegrationTest do
     headers = [{"content-type", "application/x-www-form-urlencoded"}]
     body = "password=unknown"
 
-    {:ok, response} = Finch.build(:post, "#{url}/sign_bearer_auth", headers, body) |> Finch.request(TestFinch)
+    {:ok, response} =
+      Finch.build(:post, "#{url}/sign_bearer_auth", headers, body) |> Finch.request(TestFinch)
 
     assert response.status == 400
     assert response.body =~ ~s/Missing required properties: username/
@@ -663,13 +695,16 @@ defmodule Oasis.IntegrationTest do
     headers = [{"content-type", "application/x-www-form-urlencoded"}]
     body = "username=a&password=123&max_age=0"
 
-    {:ok, response} = Finch.build(:post, "#{url}/sign_bearer_auth", headers, body) |> Finch.request(TestFinch)
+    {:ok, response} =
+      Finch.build(:post, "#{url}/sign_bearer_auth", headers, body) |> Finch.request(TestFinch)
 
     assert response.status == 200
     token = Jason.decode!(response.body)["token"]
 
     headers = [{"authorization", "Bearer " <> token}]
-    {:ok, response} = Finch.build(:get, "#{url}/bearer_auth?max_age=-1", headers) |> Finch.request(TestFinch)
+
+    {:ok, response} =
+      Finch.build(:get, "#{url}/bearer_auth?max_age=-1", headers) |> Finch.request(TestFinch)
 
     assert response.status == 401
     assert Jason.decode!(response.body)["status"] == "invalid token"
@@ -702,6 +737,7 @@ defmodule Oasis.IntegrationTest do
     fakeimagebinary\r
     ----76b20336b057--\r
     """
+
     assert {:ok, response} =
              Finch.build(:post, "#{url}/test_files_upload", headers, multipart)
              |> Finch.request(TestFinch)
@@ -728,7 +764,8 @@ defmodule Oasis.IntegrationTest do
              |> Finch.request(TestFinch)
 
     assert response.status == 400 and
-             response.body == "Find body parameter `body_request` with error: At /id: Expected type integer, got string"
+             response.body ==
+               "Find body parameter `body_request` with error: At /id: Expected type integer, got string"
   end
 
   test "verify hmac auth host only", %{url: url} do
@@ -736,15 +773,23 @@ defmodule Oasis.IntegrationTest do
     c = Oasis.Test.Support.HMAC.case_host_only()
 
     # success
-    auth = "HMAC-SHA256 Credential=#{c.credential}&SignedHeaders=#{c.signed_headers}&Signature=#{c.signature_sha256}"
+    auth =
+      "HMAC-SHA256 Credential=#{c.credential}&SignedHeaders=#{c.signed_headers}&Signature=#{c.signature_sha256}"
+
     headers = [{"host", c.host}, {"authorization", auth}]
-    {:ok, response} = Finch.build(:get, "#{url}#{c.path_and_query}", headers, nil) |> Finch.request(TestFinch)
+
+    {:ok, response} =
+      Finch.build(:get, "#{url}#{c.path_and_query}", headers, nil) |> Finch.request(TestFinch)
+
     assert response.status == 200
 
     # invalid signature
     wrong_auth = auth <> "wrong"
     headers = [{"host", c.host}, {"authorization", wrong_auth}]
-    {:ok, response} = Finch.build(:get, "#{url}#{c.path_and_query}", headers, nil) |> Finch.request(TestFinch)
+
+    {:ok, response} =
+      Finch.build(:get, "#{url}#{c.path_and_query}", headers, nil) |> Finch.request(TestFinch)
+
     assert response.status == 401
   end
 
@@ -752,9 +797,13 @@ defmodule Oasis.IntegrationTest do
     start_supervised!({Finch, name: TestFinch})
     c = Oasis.Test.Support.HMAC.case_with_date()
 
-    auth = "HMAC-SHA256 Credential=#{c.credential}&SignedHeaders=#{c.signed_headers}&Signature=#{c.signature_sha256}"
+    auth =
+      "HMAC-SHA256 Credential=#{c.credential}&SignedHeaders=#{c.signed_headers}&Signature=#{c.signature_sha256}"
+
     headers = [{"host", c.host}, {"x-oasis-date", c.x_oasis_date}, {"authorization", auth}]
-    {:ok, response} = Finch.build(:get, "#{url}#{c.path_and_query}", headers, nil) |> Finch.request(TestFinch)
+
+    {:ok, response} =
+      Finch.build(:get, "#{url}#{c.path_and_query}", headers, nil) |> Finch.request(TestFinch)
 
     # expired
     assert response.status == 401
@@ -764,9 +813,13 @@ defmodule Oasis.IntegrationTest do
     start_supervised!({Finch, name: TestFinch})
     c = Oasis.Test.Support.HMAC.case_with_date_now()
 
-    auth = "HMAC-SHA256 Credential=#{c.credential}&SignedHeaders=#{c.signed_headers}&Signature=#{c.signature_sha256}"
+    auth =
+      "HMAC-SHA256 Credential=#{c.credential}&SignedHeaders=#{c.signed_headers}&Signature=#{c.signature_sha256}"
+
     headers = [{"host", c.host}, {"x-oasis-date", c.x_oasis_date}, {"authorization", auth}]
-    {:ok, response} = Finch.build(:get, "#{url}#{c.path_and_query}", headers, nil) |> Finch.request(TestFinch)
+
+    {:ok, response} =
+      Finch.build(:get, "#{url}#{c.path_and_query}", headers, nil) |> Finch.request(TestFinch)
 
     assert response.status == 200
   end
@@ -776,14 +829,18 @@ defmodule Oasis.IntegrationTest do
     c = Oasis.Test.Support.HMAC.case_with_body()
 
     # success
-    auth = "HMAC-SHA256 Credential=#{c.credential}&SignedHeaders=#{c.signed_headers}&Signature=#{c.signature_sha256}"
+    auth =
+      "HMAC-SHA256 Credential=#{c.credential}&SignedHeaders=#{c.signed_headers}&Signature=#{c.signature_sha256}"
+
     headers = [
       {"content-type", c.content_type},
       {"host", c.host},
       {"x-oasis-body-sha256", c.x_oasis_body_sha256},
       {"authorization", auth}
     ]
-    {:ok, response} = Finch.build(:post, "#{url}#{c.path_and_query}", headers, c.body) |> Finch.request(TestFinch)
+
+    {:ok, response} =
+      Finch.build(:post, "#{url}#{c.path_and_query}", headers, c.body) |> Finch.request(TestFinch)
 
     assert response.status == 200
 
@@ -794,7 +851,9 @@ defmodule Oasis.IntegrationTest do
       {"x-oasis-body-sha256", c.x_oasis_body_sha256 <> "wrong"},
       {"authorization", auth}
     ]
-    {:ok, response} = Finch.build(:post, "#{url}#{c.path_and_query}", headers, c.body) |> Finch.request(TestFinch)
+
+    {:ok, response} =
+      Finch.build(:post, "#{url}#{c.path_and_query}", headers, c.body) |> Finch.request(TestFinch)
 
     assert response.status == 401
 
@@ -805,9 +864,10 @@ defmodule Oasis.IntegrationTest do
       {"x-oasis-body-sha256", c.x_oasis_body_sha256},
       {"authorization", auth <> "wrong"}
     ]
-    {:ok, response} = Finch.build(:post, "#{url}#{c.path_and_query}", headers, c.body) |> Finch.request(TestFinch)
+
+    {:ok, response} =
+      Finch.build(:post, "#{url}#{c.path_and_query}", headers, c.body) |> Finch.request(TestFinch)
 
     assert response.status == 401
   end
-
 end

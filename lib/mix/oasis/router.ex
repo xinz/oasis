@@ -31,8 +31,7 @@ defmodule Mix.Oasis.Router do
   @spec_ext_signed_headers "x-oasis-signed-headers"
 
   def generate_files_by_paths_spec(apps, %{"paths" => paths_spec} = spec, opts)
-    when is_map(paths_spec) do
-
+      when is_map(paths_spec) do
     opts = put_opts(spec, opts)
 
     {name_space_from_paths, paths_spec} = Map.pop(paths_spec, @spec_ext_name_space)
@@ -77,7 +76,6 @@ defmodule Mix.Oasis.Router do
       |> Map.get(url, %{})
       |> Map.take(Oasis.Spec.Path.supported_http_verbs())
       |> Enum.reduce({[], []}, fn {http_verb, operation}, {plug_files_to_url, routers_to_url} ->
-
         operation = Map.put_new(operation, @spec_ext_name_space, name_space)
 
         {plug_files, router} = new(apps, url, http_verb, operation, opts)
@@ -156,7 +154,7 @@ defmodule Mix.Oasis.Router do
         schema = Map.get(media, "schema")
 
         if schema != nil do
-          media = Map.put(media, "schema", %ExJsonSchema.Schema.Root{schema: schema})
+          media = Map.put(media, "schema", schema)
           Map.put(acc, content_type, media)
         else
           acc
@@ -196,7 +194,7 @@ defmodule Mix.Oasis.Router do
 
   defp map_parameter(%{"name" => name, "schema" => schema} = parameter, acc) do
     parameter =
-      put_required_if_exists(parameter, %{"schema" => %ExJsonSchema.Schema.Root{schema: schema}})
+      put_required_if_exists(parameter, %{"schema" => schema})
 
     Map.merge(acc, %{name => parameter})
   end
@@ -227,6 +225,7 @@ defmodule Mix.Oasis.Router do
 
   defp merge_security_to_operation({acc, operation}, opts) do
     {global_security, security_schemes} = opts[:global_security]
+
     security =
       case Oasis.Spec.Security.build(operation, security_schemes) do
         nil -> global_security
@@ -261,7 +260,7 @@ defmodule Mix.Oasis.Router do
     files =
       files
       |> Kernel.++(security_files)
-      |> Enum.map(fn(file) ->
+      |> Enum.map(fn file ->
         Tuple.insert_at(file, tuple_size(file), router)
       end)
 
@@ -361,7 +360,9 @@ defmodule Mix.Oasis.Router do
   defp may_inject_plug_security(_apps, %{security: nil} = router, _opts) do
     {[], router}
   end
-  defp may_inject_plug_security(apps, %{security: security} = router, opts) when is_list(security) do
+
+  defp may_inject_plug_security(apps, %{security: security} = router, opts)
+       when is_list(security) do
     {security, files} =
       Enum.reduce(security, [], fn {security_name, security_scheme}, acc ->
         security_scheme = map_security_scheme(apps, security_name, security_scheme, router, opts)
@@ -374,7 +375,13 @@ defmodule Mix.Oasis.Router do
     {files, router}
   end
 
-  defp map_security_scheme(apps, security_name, %{"scheme" => "bearer"} = security_scheme, %{name_space: name_space}, opts) do
+  defp map_security_scheme(
+         apps,
+         security_name,
+         %{"scheme" => "bearer"} = security_scheme,
+         %{name_space: name_space},
+         opts
+       ) do
     # priority use `x-oasis-name-space` field in security scheme object compare to operation's level
     # but still use the input argument option from the `oas.gen.plug` command line in the highest priority if possible.
     name_space_from_spec = Map.get(security_scheme, @spec_ext_name_space, name_space)
@@ -399,7 +406,13 @@ defmodule Mix.Oasis.Router do
     }
   end
 
-  defp map_security_scheme(apps, security_name, %{"scheme" => "hmac-" <> algorithm} = security_scheme, %{name_space: name_space}, opts) do
+  defp map_security_scheme(
+         apps,
+         security_name,
+         %{"scheme" => "hmac-" <> algorithm} = security_scheme,
+         %{name_space: name_space},
+         opts
+       ) do
     # priority use `x-oasis-name-space` field in security scheme object compare to operation's level
     # but still use the input argument option from the `oas.gen.plug` command line in the highest priority if possible.
     name_space_from_spec = Map.get(security_scheme, @spec_ext_name_space, name_space)
@@ -455,5 +468,4 @@ defmodule Mix.Oasis.Router do
       security_schemes
     }
   end
-
 end

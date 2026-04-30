@@ -14,16 +14,14 @@ defmodule Oasis.Gen.Plug.PreTestSignBearerAuth do
       "required" => true,
       "content" => %{
         "application/x-www-form-urlencoded" => %{
-          "schema" => %ExJsonSchema.Schema.Root{
-            schema: %{
-              "properties" => %{
-                "username" => %{"type" => "string"},
-                "password" => %{"type" => "string"},
-                "max_age" => %{"type" => "integer"}
-              },
-              "required" => ["username", "password"],
-              "type" => "object"
-            }
+          "schema" => %{
+            "properties" => %{
+              "username" => %{"type" => "string"},
+              "password" => %{"type" => "string"},
+              "max_age" => %{"type" => "integer"}
+            },
+            "required" => ["username", "password"],
+            "type" => "object"
           }
         }
       }
@@ -35,5 +33,4 @@ defmodule Oasis.Gen.Plug.PreTestSignBearerAuth do
   end
 
   defdelegate handle_errors(conn, error), to: Oasis.Gen.Plug.TestSignBearerAuth
-
 end

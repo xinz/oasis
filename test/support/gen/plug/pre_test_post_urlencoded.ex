@@ -16,15 +16,13 @@ defmodule Oasis.Gen.Plug.PreTestPostUrlencoded do
       "required" => true,
       "content" => %{
         "application/x-www-form-urlencoded" => %{
-          "schema" => %ExJsonSchema.Schema.Root{
-            schema: %{
-              "properties" => %{
-                "name" => %{"type" => "string"},
-                "fav_number" => %{"type" => "integer", "minimum" => 1, "maximum" => 3}
-              },
-              "required" => ["name", "fav_number"],
-              "type" => "object"
-            }
+          "schema" => %{
+            "properties" => %{
+              "name" => %{"type" => "string"},
+              "fav_number" => %{"type" => "integer", "minimum" => 1, "maximum" => 3}
+            },
+            "required" => ["name", "fav_number"],
+            "type" => "object"
           }
         }
       }
@@ -36,5 +34,4 @@ defmodule Oasis.Gen.Plug.PreTestPostUrlencoded do
   end
 
   defdelegate handle_errors(conn, error), to: Oasis.Gen.Plug.TestPost
-
 end

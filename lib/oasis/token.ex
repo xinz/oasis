@@ -57,22 +57,22 @@ defmodule Oasis.Token do
     ]
 
     @type t :: %__MODULE__{
-      secret_key_base: String.t(),
-      secret: String.t(),
-      salt: String.t(),
-      key_iterations: pos_integer(),
-      key_length: pos_integer(),
-      key_digest: atom(),
-      signed_at: non_neg_integer(),
-      max_age: integer()
-    }
-
+            secret_key_base: String.t(),
+            secret: String.t(),
+            salt: String.t(),
+            key_iterations: pos_integer(),
+            key_length: pos_integer(),
+            key_digest: atom(),
+            signed_at: non_neg_integer(),
+            max_age: integer()
+          }
   end
 
   @type opts :: Plug.opts()
 
-  @type verify_error :: {:error, :expired}
-                      | {:error, :invalid}
+  @type verify_error ::
+          {:error, :expired}
+          | {:error, :invalid}
 
   @doc """
   Avoid using the application enviroment as the configuration mechanism for this library,
@@ -97,7 +97,8 @@ defmodule Oasis.Token do
   and send to clients, we need to implement this callback function to custom the way to decrypt
   the token and verify its integrity.
   """
-  @callback verify(conn :: Plug.Conn.t(), token :: String.t(), opts) :: {:ok, term()} | verify_error
+  @callback verify(conn :: Plug.Conn.t(), token :: String.t(), opts) ::
+              {:ok, term()} | verify_error
 
   @optional_callbacks verify: 3
 
@@ -132,7 +133,7 @@ defmodule Oasis.Token do
   data from the token and verify its integrity, please see `Plug.Crypto.verify/4` for details.
   """
   @spec verify(crypto :: Crypto.t(), token :: String.t()) :: {:ok, term()} | {:error, term()}
-  def verify(%Crypto{secret_key_base: secret_key_base, salt: salt} = crypto, token) 
+  def verify(%Crypto{secret_key_base: secret_key_base, salt: salt} = crypto, token)
       when is_key_base(secret_key_base) do
     Plug.Crypto.verify(
       secret_key_base,
@@ -184,6 +185,5 @@ defmodule Oasis.Token do
   end
 
   defp filter_nil_opt({_, value}) when value != nil, do: true
-  defp filter_nil_opt(_), do: false 
-
+  defp filter_nil_opt(_), do: false
 end

@@ -22,8 +22,10 @@ defmodule Oasis.JSONSchemaTest do
   end
 
   test "compilation errors bubble up from JSONSchex" do
-    assert_raise ArgumentError, ~r/Keyword `?type`? must be one of|Keyword 'type' must be one of/, fn ->
-      JSONSchema.compile!(%{"type" => "UNKNOWN_JSON_SCHEMA"})
-    end
+    assert_raise ArgumentError,
+                 ~r/Keyword `?type`? must be one of|Keyword 'type' must be one of/,
+                 fn ->
+                   JSONSchema.compile!(%{"type" => "UNKNOWN_JSON_SCHEMA"})
+                 end
   end
 end

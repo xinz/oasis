@@ -57,7 +57,7 @@ defmodule Oasis.Test.Support.HMAC do
       content_type: "application/json",
       x_oasis_body_sha256: "3P5+6CXpXgFhLem7XGgE59ZNsvVA4DSuMwTRtYv2FTM=",
       signed_headers: "host;x-oasis-body-sha256",
-      signature_sha256: "m8O7D9VfeEzPwXjvqUaEw2fRmunQOZLOo3n5YxmtS9M=",
+      signature_sha256: "m8O7D9VfeEzPwXjvqUaEw2fRmunQOZLOo3n5YxmtS9M="
     }
   end
 end

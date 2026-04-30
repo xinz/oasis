@@ -8,16 +8,11 @@ defmodule Oasis.Spec.RefResolver do
     expand_value(document, document)
   end
 
-  @spec resolve_local_ref!(map(), String.t() | ExJsonSchema.Schema.Ref.t()) :: term()
+  @spec resolve_local_ref!(map(), String.t()) :: term()
   def resolve_local_ref!(document, ref) when is_map(document) and is_binary(ref) do
     ref
     |> pointer_segments!()
     |> Enum.reduce(document, &resolve_segment!/2)
-  end
-
-  def resolve_local_ref!(document, %ExJsonSchema.Schema.Ref{location: :root, fragment: fragment})
-      when is_map(document) and is_list(fragment) do
-    Enum.reduce(fragment, document, &resolve_segment!/2)
   end
 
   defp expand_value(document, value) when is_list(value) do
@@ -34,9 +29,7 @@ defmodule Oasis.Spec.RefResolver do
     Enum.reduce(value, %{}, fn {key, nested_value}, acc ->
       if Map.has_key?(acc, key) do
         raise InvalidSpecError,
-              "Defined a duplicated field: `#{key}` key as:\n#{
-                inspect(%{key => nested_value}, pretty: true)
-              } \n to \n#{inspect(acc, pretty: true)}"
+              "Defined a duplicated field: `#{key}` key as:\n#{inspect(%{key => nested_value}, pretty: true)} \n to \n#{inspect(acc, pretty: true)}"
       else
         Map.put(acc, key, expand_value(document, nested_value))
       end

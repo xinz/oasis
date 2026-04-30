@@ -7,9 +7,7 @@ defmodule Oasis.Gen.Plug.PreTestCookie do
     cookie_schema: %{
       "items" => %{
         "required" => true,
-        "schema" => %ExJsonSchema.Schema.Root{
-          schema: %{"items" => %{"type" => "number"}, "type" => "array"}
-        }
+        "schema" => %{"items" => %{"type" => "number"}, "type" => "array"}
       }
     }
   )
@@ -19,5 +17,4 @@ defmodule Oasis.Gen.Plug.PreTestCookie do
   end
 
   defdelegate handle_errors(conn, error), to: Oasis.Gen.Plug.TestCookie
-
 end

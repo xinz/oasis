@@ -1,5 +1,4 @@
 defmodule Oasis.Gen.Plug.PreTestFilesUpload do
-
   use Oasis.Controller
   use Plug.ErrorHandler
 
@@ -14,13 +13,11 @@ defmodule Oasis.Gen.Plug.PreTestFilesUpload do
     body_schema: %{
       "content" => %{
         "multipart/form-data" => %{
-          "schema" => %ExJsonSchema.Schema.Root{
-            schema: %{
-              "properties" => %{
-                "file" => %{"items" => %{}, "type" => "array"},
-                "logo" => %{"type" => "string"},
-                "id" => %{"type" => "integer"}
-              }
+          "schema" => %{
+            "properties" => %{
+              "file" => %{"items" => %{}, "type" => "array"},
+              "logo" => %{"type" => "string"},
+              "id" => %{"type" => "integer"}
             }
           }
         }

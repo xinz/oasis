@@ -15,9 +15,7 @@ defmodule Oasis.RouterTest do
       private: %{
         path_schema: %{
           "id" => %{
-            "schema" => %ExJsonSchema.Schema.Root{
-              schema: %{"type" => "integer"}
-            }
+            "schema" => %{"type" => "integer"}
           }
         }
       } do
@@ -44,9 +42,7 @@ defmodule Oasis.RouterTest do
       private: %{
         path_schema: %{
           "id" => %{
-            "schema" => %ExJsonSchema.Schema.Root{
-              schema: %{"type" => "integer"}
-            }
+            "schema" => %{"type" => "integer"}
           }
         }
       } do
@@ -57,9 +53,7 @@ defmodule Oasis.RouterTest do
       private: %{
         path_schema: %{
           "page_id" => %{
-            "schema" => %ExJsonSchema.Schema.Root{
-              schema: %{"type" => "integer"}
-            }
+            "schema" => %{"type" => "integer"}
           }
         }
       } do
@@ -70,14 +64,10 @@ defmodule Oasis.RouterTest do
       private: %{
         path_schema: %{
           "user_id" => %{
-            "schema" => %ExJsonSchema.Schema.Root{
-              schema: %{"type" => "integer"}
-            }
+            "schema" => %{"type" => "integer"}
           },
           "group_id" => %{
-            "schema" => %ExJsonSchema.Schema.Root{
-              schema: %{"type" => "string"}
-            }
+            "schema" => %{"type" => "string"}
           }
         }
       } do
@@ -88,7 +78,6 @@ defmodule Oasis.RouterTest do
       message = Map.get(reason, :message) || "Something went wrong"
       send_resp(conn, conn.status, message)
     end
-
   end
 
   use ExUnit.Case, async: true
@@ -152,15 +141,19 @@ defmodule Oasis.RouterTest do
 
   test "handler_errors/2 in generated plug module" do
     conn = conn(:get, "/test_header")
-    assert_raise Plug.Conn.WrapperError, ~s/** (Oasis.BadRequestError) Missing a required parameter/, fn ->
-      call(Oasis.HTTPServer.PlugRouter, conn)
-    end
+
+    assert_raise Plug.Conn.WrapperError,
+                 ~s/** (Oasis.BadRequestError) Missing a required parameter/,
+                 fn ->
+                   call(Oasis.HTTPServer.PlugRouter, conn)
+                 end
 
     conn = put_req_header(conn, "items", "[1,2,3]")
     conn = call(Oasis.HTTPServer.PlugRouter, conn)
     assert conn.req_headers == [{"items", [1, 2, 3]}]
 
     conn = conn(:get, "/test_header?raise=true") |> put_req_header("items", "[0]")
+
     assert_raise Plug.Conn.WrapperError, "** (RuntimeError) oops", fn ->
       call(Oasis.HTTPServer.PlugRouter, conn)
     end

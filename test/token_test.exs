@@ -24,22 +24,27 @@ defmodule Oasis.TokenTest do
 
     assert_raise FunctionClauseError, ~r|no function clause matching in Plug.Crypto.sign/4|, fn ->
       # missing `:salt`
-      sign(%Crypto{secret_key_base: random_string(20)}, 123) |> IO.inspect
+      sign(%Crypto{secret_key_base: random_string(20)}, 123) |> IO.inspect()
     end
   end
 
   test "sign/2 with valid crypto" do
-    assert is_bitstring(sign(%Crypto{secret_key_base: random_string(20), salt: "123"}, 123)) == true
+    assert is_bitstring(sign(%Crypto{secret_key_base: random_string(20), salt: "123"}, 123)) ==
+             true
   end
 
   test "verify/2 with invalid crypto" do
-    assert_raise FunctionClauseError, ~r|no function clause matching in Oasis.Token.verify/2|, fn ->
-      verify(%Crypto{secret_key_base: "secret_key_base"}, "token")
-    end
+    assert_raise FunctionClauseError,
+                 ~r|no function clause matching in Oasis.Token.verify/2|,
+                 fn ->
+                   verify(%Crypto{secret_key_base: "secret_key_base"}, "token")
+                 end
 
-    assert_raise FunctionClauseError, ~r|no function clause matching in Plug.Crypto.verify/4|, fn ->
-      verify(%Crypto{secret_key_base: random_string(20)}, "token")
-    end
+    assert_raise FunctionClauseError,
+                 ~r|no function clause matching in Plug.Crypto.verify/4|,
+                 fn ->
+                   verify(%Crypto{secret_key_base: random_string(20)}, "token")
+                 end
   end
 
   test "verify/2 with valid token" do

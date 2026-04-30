@@ -19,7 +19,14 @@ defmodule Oasis.MixProject do
   end
 
   def cli do
-    [preferred_envs: [coveralls: :test, "coveralls.detail": :test, "coveralls.post": :test, "coveralls.html": :test]]
+    [
+      preferred_envs: [
+        coveralls: :test,
+        "coveralls.detail": :test,
+        "coveralls.post": :test,
+        "coveralls.html": :test
+      ]
+    ]
   end
 
   # Run "mix help compile.app" to learn about applications.
@@ -41,7 +48,6 @@ defmodule Oasis.MixProject do
       {:plug_crypto, "~> 1.2"},
       {:jason, "~> 1.2"},
       {:jsonschex, "~> 0.5"},
-      {:ex_json_schema, "~> 0.7"},
       {:recase, "~> 0.7", runtime: false},
       {:plug_cowboy, "~> 2.0", only: [:dev, :test]},
       {:cowboy, "~> 2.12.0", only: [:dev, :test]},
@@ -71,7 +77,7 @@ defmodule Oasis.MixProject do
         "CHANGELOG.md",
         "guides/handle_errors.md",
         "guides/specification_ext.md",
-        "guides/hmac_based_authentication.md",
+        "guides/hmac_based_authentication.md"
       ],
       groups_for_modules: groups_for_modules(),
       groups_for_extras: groups_for_extras()
@@ -102,5 +108,4 @@ defmodule Oasis.MixProject do
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
-
 end

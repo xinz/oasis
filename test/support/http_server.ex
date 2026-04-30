@@ -33,9 +33,7 @@ defmodule Oasis.HTTPServer.PlugRouter do
     private: %{
       path_schema: %{
         "id" => %{
-          "schema" => %ExJsonSchema.Schema.Root{
-            schema: %{"type" => "integer"}
-          }
+          "schema" => %{"type" => "integer"}
         }
       }
     } do
@@ -50,9 +48,7 @@ defmodule Oasis.HTTPServer.PlugRouter do
     private: %{
       path_schema: %{
         "id" => %{
-          "schema" => %ExJsonSchema.Schema.Root{
-            schema: %{"type" => "integer"}
-          }
+          "schema" => %{"type" => "integer"}
         }
       }
     },

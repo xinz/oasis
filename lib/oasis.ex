@@ -21,7 +21,11 @@ defmodule Oasis do
     @moduledoc """
     Error raised when some reason could not process the request due to client error.
     """
-    defexception message: "invalid request", use_in: nil, param_name: nil, error: nil, plug_status: 400
+    defexception message: "invalid request",
+                 use_in: nil,
+                 param_name: nil,
+                 error: nil,
+                 plug_status: 400
 
     defmodule Invalid do
       @moduledoc """
@@ -53,7 +57,6 @@ defmodule Oasis do
       """
       defstruct([])
     end
-
   end
 
   defmodule CacheRawBodyReader do
@@ -65,5 +68,4 @@ defmodule Oasis do
       {:ok, body, conn}
     end
   end
-
 end

@@ -89,7 +89,7 @@ defmodule Mix.Tasks.Oas.Gen.PlugTest do
         assert file =~ ~s|defmodule Oasis.Gen.PreAddPet do|
         assert file =~ ~s|use Oasis.Controller|
         assert file =~ ~s|plug(\n    Plug.Parsers,|
-        assert file =~ ~s|"application/json" => %{\n          "schema" => %ExJsonSchema.Schema.Root{|
+        assert file =~ ~s|"application/json" => %{\n          "schema" => %{|
         assert file =~ ~s/conn |> super(opts) |> Oasis.Gen.AddPet.call(opts) |> halt()/
       end)
 
@@ -147,7 +147,7 @@ defmodule Mix.Tasks.Oas.Gen.PlugTest do
       end)
     end)
   end
-  
+
   test "generates with HMAC token", config do
     in_tmp_project(config.test, fn ->
       file_path = Path.join([__DIR__, "file/petstore-expanded-with-hmac-auth.yaml"])

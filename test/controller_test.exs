@@ -8,7 +8,7 @@ defmodule Oasis.ControllerTest do
   import Oasis.Controller
 
   defp get_resp_content_type(conn) do
-    [header]  = get_resp_header(conn, "content-type")
+    [header] = get_resp_header(conn, "content-type")
     header |> String.split(";") |> Enum.fetch!(0)
   end
 
@@ -67,8 +67,9 @@ defmodule Oasis.ControllerTest do
 
     test "allows content-type injection on connection" do
       conn = conn(:get, "/") |> put_resp_content_type("application/vnd.api+json")
-      conn = json(conn, %{"foo" => %{"ids" => [3,2,1]}})
+      conn = json(conn, %{"foo" => %{"ids" => [3, 2, 1]}})
       assert conn.resp_body == "{\"foo\":{\"ids\":[3,2,1]}}"
+
       assert Conn.get_resp_header(conn, "content-type") ==
                ["application/vnd.api+json; charset=utf-8"]
     end
@@ -78,5 +79,4 @@ defmodule Oasis.ControllerTest do
     conn = put_private(%Conn{}, :oasis_router, Hello)
     assert router_module(conn) == Hello
   end
-
 end

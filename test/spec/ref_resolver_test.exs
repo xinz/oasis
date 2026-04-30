@@ -20,7 +20,10 @@ defmodule Oasis.Spec.RefResolverTest do
       }
     }
 
-    assert RefResolver.resolve_local_ref!(document, "#/components/schemas/Tag") == %{"type" => "string"}
+    assert RefResolver.resolve_local_ref!(document, "#/components/schemas/Tag") == %{
+             "type" => "string"
+           }
+
     assert RefResolver.resolve_local_ref!(document, "#/items/0/name") == "first"
     assert RefResolver.resolve_local_ref!(document, "#/special/a~1b/~0value") == 1
   end

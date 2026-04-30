@@ -6,9 +6,7 @@ defmodule Oasis.Gen.Plug.PreTestBearerAuth do
     Oasis.Plug.RequestValidator,
     query_schema: %{
       "max_age" => %{
-        "schema" => %ExJsonSchema.Schema.Root{
-          schema: %{"type" => "integer"}
-        },
+        "schema" => %{"type" => "integer"},
         "required" => false
       }
     }
@@ -25,5 +23,4 @@ defmodule Oasis.Gen.Plug.PreTestBearerAuth do
   end
 
   defdelegate handle_errors(conn, error), to: Oasis.Gen.Plug.TestBearerAuth
-
 end

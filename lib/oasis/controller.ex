@@ -32,14 +32,14 @@ defmodule Oasis.Controller do
   @doc """
   Returns the router module as an atom, raises if unavailable.
   """
-  @spec router_module(Plug.Conn.t) :: atom()
+  @spec router_module(Plug.Conn.t()) :: atom()
   def router_module(conn), do: conn.private.oasis_router
 
   @doc """
   Sends text response.
 
   ## Examples
-  
+
       iex> text(conn, "hello")
 
       iex> text(conn, :implements_to_string)
@@ -67,7 +67,7 @@ defmodule Oasis.Controller do
   Sends JSON response.
 
   It uses `Jason` to encode the input as an iodata data.
-  
+
   ## Examples
 
       iex> json(conn, %{id: 1})

@@ -17,9 +17,11 @@ defmodule Oasis.Plug.BearerAuthTest do
 
     @impl true
     def crypto_config(conn, opts \\ [])
+
     def crypto_config(%Conn{request_path: "/expired"}, opts) do
       load_crypto_config(opts ++ [max_age: -100])
     end
+
     def crypto_config(_conn, opts) do
       load_crypto_config(opts)
     end
@@ -46,14 +48,15 @@ defmodule Oasis.Plug.BearerAuthTest do
     @impl true
     def verify(conn, token, opts) do
       verified = crypto_config(conn, opts) |> Oasis.Token.verify(token)
+
       case verified do
         {:ok, 1} ->
           verified
+
         _ ->
           {:error, :invalid}
       end
     end
-
   end
 
   describe "bearer_auth" do
@@ -63,11 +66,13 @@ defmodule Oasis.Plug.BearerAuthTest do
 
       token = sign(crypto, id)
 
-      assert_raise RuntimeError, ~r|no :security option found in path / with plug Oasis.Plug.BearerAuth|, fn ->
-        conn(:get, "/")
-        |> put_req_header("authorization", "Bearer #{token}")
-        |> bearer_auth()
-      end
+      assert_raise RuntimeError,
+                   ~r|no :security option found in path / with plug Oasis.Plug.BearerAuth|,
+                   fn ->
+                     conn(:get, "/")
+                     |> put_req_header("authorization", "Bearer #{token}")
+                     |> bearer_auth()
+                   end
     end
 
     test "sign and verify a valid token" do
@@ -144,7 +149,6 @@ defmodule Oasis.Plug.BearerAuthTest do
         |> bearer_auth(security: BearerAuthWithVerify, key_to_assigns: :id)
       end
     end
-
   end
 
   describe "parse_bearer_auth" do
@@ -179,5 +183,4 @@ defmodule Oasis.Plug.BearerAuthTest do
              ]
     end
   end
-
 end

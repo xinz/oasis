@@ -483,13 +483,26 @@ defmodule Oasis.Spec.PathTest do
                 schema:
                   $ref: '#/components/schemas/RefreshTokenForm'
     """
+
     %{schema: schema} = yaml_to_json_schema(yaml_str) |> Utils.expand_ref() |> Path.build()
     components = schema["components"]
-    content_schema = get_in(components, ["requestBodies", "RefreshTokenForm", "content", "application/json", "schema"])
+
+    content_schema =
+      get_in(components, [
+        "requestBodies",
+        "RefreshTokenForm",
+        "content",
+        "application/json",
+        "schema"
+      ])
+
     assert content_schema["type"] == "object" and content_schema["required"] == ["refresh_token"]
 
     paths = schema["paths"]
-    content_schema = get_in(paths, ["/refresh", "post", "requestBody", "content", "application/json", "schema"])
+
+    content_schema =
+      get_in(paths, ["/refresh", "post", "requestBody", "content", "application/json", "schema"])
+
     assert content_schema["type"] == "object" and content_schema["required"] == ["refresh_token"]
   end
 
@@ -519,7 +532,10 @@ defmodule Oasis.Spec.PathTest do
     security_schemes = Oasis.Spec.Security.security_schemes(schema)
 
     assert Oasis.Spec.Security.build(schema, security_schemes) ==
-      [{"bearerAuth", %{"scheme" => "bearer", "type" => "http", "x-oasis-key-to-assigns" => "id"}}]
+             [
+               {"bearerAuth",
+                %{"scheme" => "bearer", "type" => "http", "x-oasis-key-to-assigns" => "id"}}
+             ]
 
     schema = Map.delete(schema, "security")
 
@@ -573,7 +589,10 @@ defmodule Oasis.Spec.PathTest do
     operation = paths["/user"]["get"]
 
     assert Oasis.Spec.Security.build(operation, security_schemes) ==
-      [{"bearerAuth", %{"scheme" => "bearer", "type" => "http", "x-oasis-key-to-assigns" => "id"}}]
+             [
+               {"bearerAuth",
+                %{"scheme" => "bearer", "type" => "http", "x-oasis-key-to-assigns" => "id"}}
+             ]
 
     operation = paths["/register"]["post"]
     # not supported yet
@@ -615,7 +634,9 @@ defmodule Oasis.Spec.PathTest do
     security_schemes = Oasis.Spec.Security.security_schemes(schema)
 
     assert Oasis.Spec.Security.build(schema, security_schemes) ==
-      [{"bearerAuth", %{"scheme" => "bearer", "type" => "http", "x-oasis-key-to-assigns" => "verified"}}]
+             [
+               {"bearerAuth",
+                %{"scheme" => "bearer", "type" => "http", "x-oasis-key-to-assigns" => "verified"}}
+             ]
   end
-
 end

@@ -61,7 +61,12 @@ defmodule Oasis.Validator do
     |> process_media_type(media_type, use_in, name, value)
   end
 
-  defp do_parse_and_validate!(json_schema_root, "body", param_name, %{"_json" => value} = wrapped_value) do
+  defp do_parse_and_validate!(
+         json_schema_root,
+         "body",
+         param_name,
+         %{"_json" => value} = wrapped_value
+       ) do
     if unwrap_json_body?(json_schema_root, value) do
       # Since `Plug.Parsers.JSON` parses a non-map body content into a "_json" key to allow proper param merging, here
       # will unwrap the "_json" key and format the input body params as a matched type to the defined OpenAPI specification.
@@ -87,10 +92,8 @@ defmodule Oasis.Validator do
           use_in: use_in,
           param_name: param_name,
           message: "Failed to convert parameter"
-
     else
       parsed ->
-
         result =
           json_schema_root
           |> json_schema_validate(parsed)
@@ -108,7 +111,8 @@ defmodule Oasis.Validator do
               },
               use_in: use_in,
               param_name: param_name,
-              message: "Failed to validate JSON schema with an error: #{JSONSchema.format_error(error)}"
+              message:
+                "Failed to validate JSON schema with an error: #{JSONSchema.format_error(error)}"
         end
     end
   end
@@ -151,7 +155,10 @@ defmodule Oasis.Validator do
 
   defp error_to_attention?(_error, _parsed), do: true
 
-  defp ignore_upload_error?(%JSONSchex.Types.Error{rule: :type, path: path, context: context}, parsed) do
+  defp ignore_upload_error?(
+         %JSONSchex.Types.Error{rule: :type, path: path, context: context},
+         parsed
+       ) do
     case value_in_path(List.wrap(path), parsed) do
       %Plug.Upload{} ->
         # ignore `Plug.Upload` failed in json schema validation
@@ -248,5 +255,4 @@ defmodule Oasis.Validator do
   defp process_media_type(_content_type, _schema, _use_in, _name, value) do
     value
   end
-
 end

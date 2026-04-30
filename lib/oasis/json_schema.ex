@@ -12,7 +12,7 @@ defmodule Oasis.JSONSchema do
             options: keyword()
           }
 
-  @type schema_ref :: t() | ExJsonSchema.Schema.Root.t() | map()
+  @type schema_ref :: t() | map()
 
   @spec compile(map(), keyword()) :: {:ok, t()} | {:error, JSONSchex.Types.Error.t()}
   def compile(schema, opts \\ []) when is_map(schema) and not is_struct(schema) do
@@ -38,17 +38,12 @@ defmodule Oasis.JSONSchema do
   @spec wrap(schema_ref()) :: t()
   def wrap(%__MODULE__{} = schema), do: schema
 
-  def wrap(%ExJsonSchema.Schema.Root{schema: schema}) do
-    compile!(schema)
-  end
-
   def wrap(schema) when is_map(schema) and not is_struct(schema) do
     compile!(schema)
   end
 
   @spec raw_schema(schema_ref()) :: map()
   def raw_schema(%__MODULE__{schema: schema}), do: schema
-  def raw_schema(%ExJsonSchema.Schema.Root{schema: schema}), do: schema
   def raw_schema(schema) when is_map(schema) and not is_struct(schema), do: schema
 
   @spec validate(schema_ref(), term()) :: :ok | {:error, [JSONSchex.Types.Error.t()]}

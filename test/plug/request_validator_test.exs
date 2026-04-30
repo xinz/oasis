@@ -5,15 +5,13 @@ defmodule Oasis.Plug.RequestValidatorTest do
 
   alias Oasis.Plug.RequestValidator
 
-  @schema1 %ExJsonSchema.Schema.Root{
-    schema: %{
-      "properties" => %{
-        "name" => %{"type" => "string"},
-        "tag" => %{"type" => "integer"}
-      },
-      "required" => ["name", "tag"],
-      "type" => "object"
-    }
+  @schema1 %{
+    "properties" => %{
+      "name" => %{"type" => "string"},
+      "tag" => %{"type" => "integer"}
+    },
+    "required" => ["name", "tag"],
+    "type" => "object"
   }
 
   describe "with charset in send request" do
@@ -29,13 +27,14 @@ defmodule Oasis.Plug.RequestValidatorTest do
 
       assert_raise Oasis.BadRequestError, ~r/Failed to convert parameter/, fn ->
         conn =
-          conn(:post, "/req_validator", %{"name"=> "test_name", "tag" => "a"})
+          conn(:post, "/req_validator", %{"name" => "test_name", "tag" => "a"})
           |> put_req_header("content-type", "Application/json; charset=utf-8")
+
         RequestValidator.call(conn, body_schema: body_schema)
       end
 
       conn =
-        conn(:post, "/req_validator", %{"name"=> "test_name", "tag" => "1"})
+        conn(:post, "/req_validator", %{"name" => "test_name", "tag" => "1"})
         |> put_req_header("content-type", "Application/json; charset=utf-8")
 
       conn = RequestValidator.call(conn, body_schema: body_schema)
@@ -57,13 +56,14 @@ defmodule Oasis.Plug.RequestValidatorTest do
 
       assert_raise Oasis.BadRequestError, ~r/Failed to convert parameter/, fn ->
         conn =
-          conn(:post, "/req_validator", %{"name"=> "test_name", "tag" => "a"})
+          conn(:post, "/req_validator", %{"name" => "test_name", "tag" => "a"})
           |> put_req_header("content-type", "tExt/PlAin; charset=utf-8")
+
         RequestValidator.call(conn, body_schema: body_schema)
       end
 
       conn =
-        conn(:post, "/req_validator", %{"name"=> "test_name", "tag" => "-1"})
+        conn(:post, "/req_validator", %{"name" => "test_name", "tag" => "-1"})
         |> put_req_header("content-type", "text/plain; charset=utf-8")
 
       conn = RequestValidator.call(conn, body_schema: body_schema)
@@ -85,20 +85,22 @@ defmodule Oasis.Plug.RequestValidatorTest do
 
       assert_raise Oasis.BadRequestError, ~r/Failed to convert parameter/, fn ->
         conn =
-          conn(:post, "/req_validator", %{"name"=> "test_name", "tag" => "a"})
+          conn(:post, "/req_validator", %{"name" => "test_name", "tag" => "a"})
           |> put_req_header("content-type", "application/x-www-form-urlencoded; charset=utf-8")
+
         RequestValidator.call(conn, body_schema: body_schema)
       end
 
       assert_raise Oasis.BadRequestError, ~r/Failed to convert parameter/, fn ->
         conn =
-          conn(:post, "/req_validator", %{"name"=> "test_name2", "tag" => "100.0"})
+          conn(:post, "/req_validator", %{"name" => "test_name2", "tag" => "100.0"})
           |> put_req_header("content-type", "application/x-www-form-urlencoded; charset=utf-8")
+
         RequestValidator.call(conn, body_schema: body_schema)
       end
 
       conn =
-        conn(:post, "/req_validator", %{"name"=> "test_name2", "tag" => "1000"})
+        conn(:post, "/req_validator", %{"name" => "test_name2", "tag" => "1000"})
         |> put_req_header("content-type", "application/x-www-form-urlencoded; charset=utf-8")
 
       conn = RequestValidator.call(conn, body_schema: body_schema)
@@ -108,5 +110,4 @@ defmodule Oasis.Plug.RequestValidatorTest do
       assert body_params["tag"] == 1000 and body_params["name"] == "test_name2"
     end
   end
-
 end

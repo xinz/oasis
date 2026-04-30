@@ -165,6 +165,7 @@ defmodule Oasis.Plug.BearerAuth do
          {conn, security, crypto} <- load_crypto(conn, options),
          {:ok, data} <- verify(conn, security, crypto, token, options) do
       key = Keyword.get(options, :key_to_assigns)
+
       if key != nil do
         assign(conn, key, data)
       else
@@ -224,6 +225,7 @@ defmodule Oasis.Plug.BearerAuth do
     case Keyword.get(options, :error) do
       {error_code, error_desc} ->
         "Bearer realm=\"#{escaped_realm}\",error=\"#{error_code}\",error_description=\"#{error_desc}\""
+
       _ ->
         "Bearer realm=\"#{escaped_realm}\""
     end
@@ -249,8 +251,10 @@ defmodule Oasis.Plug.BearerAuth do
     case result do
       {:ok, _} ->
         result
+
       {:error, :expired} ->
         {:error, "expired_token"}
+
       {:error, _invalid} ->
         {:error, "invalid_token"}
     end
@@ -276,6 +280,7 @@ defmodule Oasis.Plug.BearerAuth do
       use_in: "header",
       param_name: "authorization"
   end
+
   defp raise_invalid_auth({:error, "expired_token"}) do
     raise BadRequestError,
       error: %BadRequestError.InvalidToken{},
@@ -284,6 +289,7 @@ defmodule Oasis.Plug.BearerAuth do
       param_name: "authorization",
       plug_status: 401
   end
+
   defp raise_invalid_auth({:error, "invalid_token"}) do
     raise BadRequestError,
       error: %BadRequestError.InvalidToken{},

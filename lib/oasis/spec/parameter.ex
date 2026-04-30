@@ -13,9 +13,7 @@ defmodule Oasis.Spec.Parameter do
 
   defp check_schema_or_content(parameter, nil, nil) do
     raise InvalidSpecError,
-          "A parameter MUST contain either a schema property, or a content property, but not found any in #{
-            inspect(parameter, pretty: true)
-          }"
+          "A parameter MUST contain either a schema property, or a content property, but not found any in #{inspect(parameter, pretty: true)}"
   end
 
   defp check_schema_or_content(parameter, schema, nil) when schema != nil do
@@ -26,9 +24,7 @@ defmodule Oasis.Spec.Parameter do
     Enum.each(content, fn {content_type, media_type} ->
       if media_type["schema"] == nil do
         raise InvalidSpecError,
-              "Not found required schema field in media type object #{inspect(content_type)}: #{
-                inspect(media_type, pretty: true)
-              } in parameter #{inspect(parameter, pretty: true)}"
+              "Not found required schema field in media type object #{inspect(content_type)}: #{inspect(media_type, pretty: true)} in parameter #{inspect(parameter, pretty: true)}"
       end
     end)
 
@@ -37,9 +33,7 @@ defmodule Oasis.Spec.Parameter do
 
   defp check_schema_or_content(parameter, _schema, _content) do
     raise InvalidSpecError,
-          "A parameter MUST contain either a schema property, or a content property, but found both in #{
-            inspect(parameter, pretty: true)
-          }"
+          "A parameter MUST contain either a schema property, or a content property, but found both in #{inspect(parameter, pretty: true)}"
   end
 
   defp check_name(%{"in" => "path", "name" => name, "required" => true} = parameter, path_expr)
@@ -48,9 +42,7 @@ defmodule Oasis.Spec.Parameter do
       parameter
     else
       raise InvalidSpecError,
-            "The name field: `#{name}` MUST correspond to a template expression occurring within the path: `#{
-              path_expr
-            }`"
+            "The name field: `#{name}` MUST correspond to a template expression occurring within the path: `#{path_expr}`"
     end
   end
 
@@ -58,7 +50,7 @@ defmodule Oasis.Spec.Parameter do
        when is_bitstring(name) do
     raise InvalidSpecError,
           "Define a parameter object in path named as: `#{name}` within the path: `#{path_expr}`, but missing explicitly define this " <>
-          "parameter be with `required: true` in the specification"
+            "parameter be with `required: true` in the specification"
   end
 
   defp check_name(%{"in" => "header", "name" => name} = parameter, _path_expr)
@@ -78,9 +70,7 @@ defmodule Oasis.Spec.Parameter do
 
   defp check_name(%{"in" => in_field} = _parameter, path_expr) when in_field not in @locations do
     raise InvalidSpecError,
-          "The location of the parameter: `#{in_field}` is invalid in the path: `#{path_expr}`, expect to be one of #{
-            inspect(@locations)
-          }"
+          "The location of the parameter: `#{in_field}` is invalid in the path: `#{path_expr}`, expect to be one of #{inspect(@locations)}"
   end
 
   defp check_name(%{"name" => name} = parameter, path_expr) when is_bitstring(name) do
@@ -93,9 +83,7 @@ defmodule Oasis.Spec.Parameter do
 
   defp check_name(%{"name" => name} = _parameter, path_expr) do
     raise InvalidSpecError,
-          "The name of the parameter expect to be a string, but got `#{inspect(name)}` in the path: `#{
-            path_expr
-          }`"
+          "The name of the parameter expect to be a string, but got `#{inspect(name)}` in the path: `#{path_expr}`"
   end
 
   defp check_name(_parameter, path_expr) do

@@ -91,7 +91,6 @@ defmodule Oasis.Plug.RequestValidator do
          body_schema
        )
        when is_map(body_schema) do
-
     body_params = parse_and_validate_body_params(conn, body_schema)
 
     if is_map(body_params) do
@@ -108,7 +107,6 @@ defmodule Oasis.Plug.RequestValidator do
          body_schema
        )
        when is_map(body_schema) do
-
     body_params = parse_and_validate_body_params(conn, body_schema)
 
     params = Map.merge(params, body_params)
@@ -120,7 +118,10 @@ defmodule Oasis.Plug.RequestValidator do
     conn
   end
 
-  defp parse_and_validate_body_params(%{body_params: body_params, req_headers: req_headers}, body_schema) do
+  defp parse_and_validate_body_params(
+         %{body_params: body_params, req_headers: req_headers},
+         body_schema
+       ) do
     req_headers
     |> find_content_type()
     |> schema_may_match_by_request(body_schema)
@@ -146,6 +147,7 @@ defmodule Oasis.Plug.RequestValidator do
     case List.keyfind(req_headers, "content-type", 0) do
       {_, content} ->
         String.downcase(content)
+
       nil ->
         nil
     end

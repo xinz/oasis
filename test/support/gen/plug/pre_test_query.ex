@@ -8,30 +8,24 @@ defmodule Oasis.Gen.Plug.PreTestQuery do
       "profile" => %{
         "content" => %{
           "application/json" => %{
-            "schema" => %ExJsonSchema.Schema.Root{
-              schema: %{
-                "properties" => %{
-                  "name" => %{"type" => "string"},
-                  "tag" => %{"type" => "integer"}
-                },
-                "required" => ["name", "tag"],
-                "type" => "object"
-              }
+            "schema" => %{
+              "properties" => %{
+                "name" => %{"type" => "string"},
+                "tag" => %{"type" => "integer"}
+              },
+              "required" => ["name", "tag"],
+              "type" => "object"
             }
           }
         },
         "required" => false
       },
       "lang" => %{
-        "schema" => %ExJsonSchema.Schema.Root{
-          schema: %{"type" => "integer", "minimum" => 10, "maximum" => 20}
-        },
+        "schema" => %{"type" => "integer", "minimum" => 10, "maximum" => 20},
         "required" => true
       },
       "all" => %{
-        "schema" => %ExJsonSchema.Schema.Root{
-          schema: %{"type" => "boolean"}
-        },
+        "schema" => %{"type" => "boolean"},
         "required" => false
       }
     }
@@ -42,5 +36,4 @@ defmodule Oasis.Gen.Plug.PreTestQuery do
   end
 
   defdelegate handle_errors(conn, error), to: Oasis.Gen.Plug.TestQuery
-
 end

@@ -1,5 +1,4 @@
 defmodule Oasis.Gen.BearerAuth do
-
   @behaviour Oasis.Token
 
   alias Oasis.Token.Crypto
@@ -19,5 +18,4 @@ defmodule Oasis.Gen.BearerAuth do
     opts = Keyword.merge(default, opts)
     struct(%Crypto{secret_key_base: @secret_key_base}, opts)
   end
-
 end

@@ -6,9 +6,7 @@ defmodule Oasis.ValidatorTest do
   test "simple type integer" do
     param = %{
       "required" => true,
-      "schema" => %ExJsonSchema.Schema.Root{
-        schema: %{"type" => "integer", "minimum" => 10, "maximum" => 20}
-      }
+      "schema" => %{"type" => "integer", "minimum" => 10, "maximum" => 20}
     }
 
     name = "test_name"
@@ -44,9 +42,7 @@ defmodule Oasis.ValidatorTest do
   test "simple type number" do
     param = %{
       "required" => true,
-      "schema" => %ExJsonSchema.Schema.Root{
-        schema: %{"type" => "number"}
-      }
+      "schema" => %{"type" => "number"}
     }
 
     name = "test_float"
@@ -64,9 +60,7 @@ defmodule Oasis.ValidatorTest do
   test "simple type string" do
     param = %{
       "required" => true,
-      "schema" => %ExJsonSchema.Schema.Root{
-        schema: %{"type" => "string", "minLength" => 3, "maxLength" => 6}
-      }
+      "schema" => %{"type" => "string", "minLength" => 3, "maxLength" => 6}
     }
 
     name = "test_str"
@@ -83,12 +77,10 @@ defmodule Oasis.ValidatorTest do
   test "simple type string format" do
     param = %{
       "required" => true,
-      "schema" => %ExJsonSchema.Schema.Root{
-        schema: %{
-          "type" => "string",
-          "pattern" => "^(\\([0-9]{3}\\))?[0-9]{3}-[0-9]{4}$",
-          "maxLength" => 12
-        }
+      "schema" => %{
+        "type" => "string",
+        "pattern" => "^(\\([0-9]{3}\\))?[0-9]{3}-[0-9]{4}$",
+        "maxLength" => 12
       }
     }
 
@@ -107,11 +99,9 @@ defmodule Oasis.ValidatorTest do
 
     param = %{
       "required" => true,
-      "schema" => %ExJsonSchema.Schema.Root{
-        schema: %{
-          "type" => "string",
-          "format" => "email"
-        }
+      "schema" => %{
+        "type" => "string",
+        "format" => "email"
       }
     }
 
@@ -129,11 +119,9 @@ defmodule Oasis.ValidatorTest do
   test "simple type string enum" do
     param = %{
       "required" => true,
-      "schema" => %ExJsonSchema.Schema.Root{
-        schema: %{
-          "type" => "string",
-          "enum" => ["A", "B", "C"]
-        }
+      "schema" => %{
+        "type" => "string",
+        "enum" => ["A", "B", "C"]
       }
     }
 
@@ -148,10 +136,8 @@ defmodule Oasis.ValidatorTest do
   test "simple type boolean" do
     param = %{
       "required" => true,
-      "schema" => %ExJsonSchema.Schema.Root{
-        schema: %{
-          "type" => "boolean"
-        }
+      "schema" => %{
+        "type" => "boolean"
       }
     }
 
@@ -172,10 +158,8 @@ defmodule Oasis.ValidatorTest do
   test "simple type null" do
     param = %{
       "required" => false,
-      "schema" => %ExJsonSchema.Schema.Root{
-        schema: %{
-          "type" => "null"
-        }
+      "schema" => %{
+        "type" => "null"
       }
     }
 
@@ -190,12 +174,10 @@ defmodule Oasis.ValidatorTest do
   test "type array items" do
     param = %{
       "required" => true,
-      "schema" => %ExJsonSchema.Schema.Root{
-        schema: %{
-          "type" => "array",
-          "items" => %{
-            "type" => "integer"
-          }
+      "schema" => %{
+        "type" => "array",
+        "items" => %{
+          "type" => "integer"
         }
       }
     }
@@ -209,26 +191,24 @@ defmodule Oasis.ValidatorTest do
   test "type array tuple validation" do
     param = %{
       "required" => true,
-      "schema" => %ExJsonSchema.Schema.Root{
-        schema: %{
-          "type" => "array",
-          "prefixItems" => [
-            %{
-              "type" => "integer"
-            },
-            %{
-              "type" => "string"
-            },
-            %{
-              "type" => "string",
-              "enum" => ["Street", "Avenue", "Boulevard"]
-            },
-            %{
-              "type" => "string",
-              "enum" => ["NW", "NE", "SW", "SE"]
-            }
-          ]
-        }
+      "schema" => %{
+        "type" => "array",
+        "prefixItems" => [
+          %{
+            "type" => "integer"
+          },
+          %{
+            "type" => "string"
+          },
+          %{
+            "type" => "string",
+            "enum" => ["Street", "Avenue", "Boulevard"]
+          },
+          %{
+            "type" => "string",
+            "enum" => ["NW", "NE", "SW", "SE"]
+          }
+        ]
       }
     }
 
@@ -258,27 +238,25 @@ defmodule Oasis.ValidatorTest do
 
     param = %{
       "required" => true,
-      "schema" => %ExJsonSchema.Schema.Root{
-        schema: %{
-          "type" => "array",
-          "prefixItems" => [
-            %{
-              "type" => "integer"
-            },
-            %{
-              "type" => "string"
-            },
-            %{
-              "type" => "string",
-              "enum" => ["Street", "Avenue", "Boulevard"]
-            },
-            %{
-              "type" => "string",
-              "enum" => ["NW", "NE", "SW", "SE"]
-            }
-          ],
-          "items" => %{"type" => "string"}
-        }
+      "schema" => %{
+        "type" => "array",
+        "prefixItems" => [
+          %{
+            "type" => "integer"
+          },
+          %{
+            "type" => "string"
+          },
+          %{
+            "type" => "string",
+            "enum" => ["Street", "Avenue", "Boulevard"]
+          },
+          %{
+            "type" => "string",
+            "enum" => ["NW", "NE", "SW", "SE"]
+          }
+        ],
+        "items" => %{"type" => "string"}
       }
     }
 
@@ -296,12 +274,10 @@ defmodule Oasis.ValidatorTest do
 
     param = %{
       "required" => false,
-      "schema" => %ExJsonSchema.Schema.Root{
-        schema: %{
-          "type" => "array",
-          "minItems" => 2,
-          "maxItems" => 3
-        }
+      "schema" => %{
+        "type" => "array",
+        "minItems" => 2,
+        "maxItems" => 3
       }
     }
 
@@ -330,13 +306,11 @@ defmodule Oasis.ValidatorTest do
 
     param = %{
       "required" => false,
-      "schema" => %ExJsonSchema.Schema.Root{
-        schema: %{
-          "type" => "array",
-          "uniqueItems" => true,
-          "items" => %{
-            "type" => "integer"
-          }
+      "schema" => %{
+        "type" => "array",
+        "uniqueItems" => true,
+        "items" => %{
+          "type" => "integer"
         }
       }
     }
@@ -357,16 +331,14 @@ defmodule Oasis.ValidatorTest do
   test "type object properties" do
     param = %{
       "required" => true,
-      "schema" => %ExJsonSchema.Schema.Root{
-        schema: %{
-          "type" => "object",
-          "properties" => %{
-            "number" => %{"type" => "number"},
-            "street_name" => %{"type" => "string"},
-            "street_type" => %{
-              "type" => "string",
-              "enum" => ["Street", "Avenue", "Boulevard"]
-            }
+      "schema" => %{
+        "type" => "object",
+        "properties" => %{
+          "number" => %{"type" => "number"},
+          "street_name" => %{"type" => "string"},
+          "street_type" => %{
+            "type" => "string",
+            "enum" => ["Street", "Avenue", "Boulevard"]
           }
         }
       }
@@ -402,19 +374,17 @@ defmodule Oasis.ValidatorTest do
   test "type object required properties" do
     param = %{
       "required" => true,
-      "schema" => %ExJsonSchema.Schema.Root{
-        schema: %{
-          "type" => "object",
-          "properties" => %{
-            "number" => %{"type" => "number"},
-            "street_name" => %{"type" => "string"},
-            "street_type" => %{
-              "type" => "string",
-              "enum" => ["Street", "Avenue", "Boulevard"]
-            }
-          },
-          "required" => ["number", "street_name"]
-        }
+      "schema" => %{
+        "type" => "object",
+        "properties" => %{
+          "number" => %{"type" => "number"},
+          "street_name" => %{"type" => "string"},
+          "street_type" => %{
+            "type" => "string",
+            "enum" => ["Street", "Avenue", "Boulevard"]
+          }
+        },
+        "required" => ["number", "street_name"]
       }
     }
 
@@ -448,9 +418,7 @@ defmodule Oasis.ValidatorTest do
 
     param = %{
       "required" => true,
-      "schema" => %ExJsonSchema.Schema.Root{
-        schema: schema
-      }
+      "schema" => schema
     }
 
     name = "test"
@@ -511,9 +479,7 @@ defmodule Oasis.ValidatorTest do
 
     param = %{
       "required" => true,
-      "schema" => %ExJsonSchema.Schema.Root{
-        schema: schema
-      }
+      "schema" => schema
     }
 
     name = "test"
@@ -551,9 +517,7 @@ defmodule Oasis.ValidatorTest do
 
     param = %{
       "required" => true,
-      "schema" => %ExJsonSchema.Schema.Root{
-        schema: schema
-      }
+      "schema" => schema
     }
 
     data = %{"builtin" => 1}
@@ -579,16 +543,20 @@ defmodule Oasis.ValidatorTest do
     data = %{"I_25" => 0, "builtin" => 1, "otherfield" => 1}
     value = Jason.encode!(data)
 
-    assert_raise Oasis.BadRequestError, ~r/At \/otherfield: Expected type string, got integer/, fn ->
-      Validator.parse_and_validate!(param, "query", name, value)
-    end
+    assert_raise Oasis.BadRequestError,
+                 ~r/At \/otherfield: Expected type string, got integer/,
+                 fn ->
+                   Validator.parse_and_validate!(param, "query", name, value)
+                 end
 
     data = %{"otherfield" => 1}
     value = Jason.encode!(data)
 
-    assert_raise Oasis.BadRequestError, ~r/At \/otherfield: Expected type string, got integer/, fn ->
-      Validator.parse_and_validate!(param, "query", name, value)
-    end
+    assert_raise Oasis.BadRequestError,
+                 ~r/At \/otherfield: Expected type string, got integer/,
+                 fn ->
+                   Validator.parse_and_validate!(param, "query", name, value)
+                 end
   end
 
   test "content type application/vnd.github+json" do
@@ -596,15 +564,13 @@ defmodule Oasis.ValidatorTest do
       "required" => true,
       "content" => %{
         "application/vnd.github+json" => %{
-          "schema" => %ExJsonSchema.Schema.Root{
-            schema: %{
-              "properties" => %{
-                "name" => %{"type" => "number"},
-                "tag" => %{"type" => "number"}
-              },
-              "required" => ["lat", "long"],
-              "type" => "object"
-            }
+          "schema" => %{
+            "properties" => %{
+              "name" => %{"type" => "number"},
+              "tag" => %{"type" => "number"}
+            },
+            "required" => ["lat", "long"],
+            "type" => "object"
           }
         }
       }
@@ -628,16 +594,14 @@ defmodule Oasis.ValidatorTest do
       "required" => true,
       "content" => %{
         "application/xml" => %{
-          "schema" => %ExJsonSchema.Schema.Root{
-            schema: %{
-              "properties" => %{
-                "id" => %{"type" => "integer"},
-                "title" => %{"type" => "string"},
-                "author" => %{"type" => "string"}
-              },
-              "required" => ["id", "title", "author"],
-              "type" => "object"
-            }
+          "schema" => %{
+            "properties" => %{
+              "id" => %{"type" => "integer"},
+              "title" => %{"type" => "string"},
+              "author" => %{"type" => "string"}
+            },
+            "required" => ["id", "title", "author"],
+            "type" => "object"
           }
         }
       }
@@ -660,12 +624,10 @@ defmodule Oasis.ValidatorTest do
       "required" => true,
       "content" => %{
         "text/plain" => %{
-          "schema" => %ExJsonSchema.Schema.Root{
-            schema: %{
-              "type" => "array",
-              "items" => %{
-                "type" => "string"
-              }
+          "schema" => %{
+            "type" => "array",
+            "items" => %{
+              "type" => "string"
             }
           }
         }
@@ -685,12 +647,10 @@ defmodule Oasis.ValidatorTest do
       "required" => true,
       "content" => %{
         "text/plain; charset=utf-8" => %{
-          "schema" => %ExJsonSchema.Schema.Root{
-            schema: %{
-              "type" => "array",
-              "items" => %{
-                "type" => "integer"
-              }
+          "schema" => %{
+            "type" => "array",
+            "items" => %{
+              "type" => "integer"
             }
           }
         }
@@ -709,12 +669,10 @@ defmodule Oasis.ValidatorTest do
     param = %{
       "content" => %{
         "image/png" => %{
-          "schema" => %ExJsonSchema.Schema.Root{
-            schema: %{
-              "type" => "string",
-              "contentMediaType" => "image/png",
-              "contentEncoding" => "base64"
-            }
+          "schema" => %{
+            "type" => "string",
+            "contentMediaType" => "image/png",
+            "contentEncoding" => "base64"
           }
         }
       }
@@ -731,12 +689,10 @@ defmodule Oasis.ValidatorTest do
       "required" => true,
       "content" => %{
         "application/json; charset=utf-8" => %{
-          "schema" => %ExJsonSchema.Schema.Root{
-            schema: %{
-              "type" => "object",
-              "properties" => %{
-                "name" => %{"type" => "string"}
-              }
+          "schema" => %{
+            "type" => "object",
+            "properties" => %{
+              "name" => %{"type" => "string"}
             }
           }
         }
@@ -747,7 +703,7 @@ defmodule Oasis.ValidatorTest do
                  ~r/At \/name: Expected type string, got integer/,
                  fn ->
                    Validator.parse_and_validate!(param, "body", "name", %{"name" => 1})
-                end
+                 end
 
     valid_value = %{"name" => "hello"}
     assert Validator.parse_and_validate!(param, "body", "name", valid_value) == valid_value
@@ -759,18 +715,18 @@ defmodule Oasis.ValidatorTest do
     assert_raise Oasis.BadRequestError,
                  ~r/At \/name: Expected type string, got integer/,
                  fn ->
-                   Validator.parse_and_validate!(param_without_charset, "body", "name", %{"name" => 1})
-                end
+                   Validator.parse_and_validate!(param_without_charset, "body", "name", %{
+                     "name" => 1
+                   })
+                 end
   end
 
   test "invalid json" do
     param = %{
-      "schema" => %ExJsonSchema.Schema.Root{
-        schema: %{
-          "type" => "array",
-          "items" => %{
-            "type" => "string"
-          }
+      "schema" => %{
+        "type" => "array",
+        "items" => %{
+          "type" => "string"
         }
       }
     }
@@ -787,10 +743,8 @@ defmodule Oasis.ValidatorTest do
 
   test "unknown schema type is rejected during compilation" do
     param = %{
-      "schema" => %ExJsonSchema.Schema.Root{
-        schema: %{
-          "type" => "UNKNOWN_JSON_SCHEMA"
-        }
+      "schema" => %{
+        "type" => "UNKNOWN_JSON_SCHEMA"
       }
     }
 
@@ -808,18 +762,13 @@ defmodule Oasis.ValidatorTest do
     param = %{
       "content" => %{
         "application/x-www-form-urlencoded" => %{
-          "schema" => %ExJsonSchema.Schema.Root{
-            custom_format_validator: nil,
-            location: :root,
-            refs: %{},
-            schema: %{
-              "properties" => %{
-                "fav_number" => %{"type" => "integer"},
-                "name" => %{"type" => "string"}
-              },
-              "required" => ["name", "fav_number"],
-              "type" => "object"
-            }
+          "schema" => %{
+            "properties" => %{
+              "fav_number" => %{"type" => "integer"},
+              "name" => %{"type" => "string"}
+            },
+            "required" => ["name", "fav_number"],
+            "type" => "object"
           }
         }
       },
@@ -839,13 +788,23 @@ defmodule Oasis.ValidatorTest do
     assert result == %{"fav_number" => 1, "name" => "test_name"}
 
     content = param["content"]
-    content = %{"application/x-www-form-urlencoded; charset=utf-8" => content["application/x-www-form-urlencoded"]}
+
+    content = %{
+      "application/x-www-form-urlencoded; charset=utf-8" =>
+        content["application/x-www-form-urlencoded"]
+    }
+
     param_with_charset = Map.put(param, "content", content)
 
     assert_raise Oasis.BadRequestError,
                  ~r/Missing required properties: name, fav_number/,
                  fn ->
-                   Validator.parse_and_validate!(param_with_charset, "body", "body_request", invalid_input)
+                   Validator.parse_and_validate!(
+                     param_with_charset,
+                     "body",
+                     "body_request",
+                     invalid_input
+                   )
                  end
   end
 
@@ -864,17 +823,16 @@ defmodule Oasis.ValidatorTest do
     type = %{
       "content" => %{
         "application/json" => %{
-          "schema" => %ExJsonSchema.Schema.Root{
-            schema: %{
-              "properties" => %{"refresh_token" => %{"type" => "string"}},
-              "required" => ["refresh_token"],
-              "type" => "object"
-            }
+          "schema" => %{
+            "properties" => %{"refresh_token" => %{"type" => "string"}},
+            "required" => ["refresh_token"],
+            "type" => "object"
           }
         }
       },
       "required" => true
     }
+
     assert_raise Oasis.BadRequestError,
                  ~r/Missing required properties: refresh_token/,
                  fn ->
@@ -888,15 +846,13 @@ defmodule Oasis.ValidatorTest do
     param = %{
       "content" => %{
         "multipart/form-data" => %{
-          "schema" => %ExJsonSchema.Schema.Root{
-            schema: %{
-              "properties" => %{
-                "file" => %{"format" => "binary", "type" => "string"},
-                "id" => %{"type" => "integer", "maximum" => 10}
-              },
-              "required" => ["file"],
-              "type" => "object"
-            }
+          "schema" => %{
+            "properties" => %{
+              "file" => %{"format" => "binary", "type" => "string"},
+              "id" => %{"type" => "integer", "maximum" => 10}
+            },
+            "required" => ["file"],
+            "type" => "object"
           }
         }
       }
@@ -935,9 +891,7 @@ defmodule Oasis.ValidatorTest do
     param = %{
       "content" => %{
         "multipart/form-data" => %{
-          "schema" => %ExJsonSchema.Schema.Root{
-            schema: %{"properties" => %{"file" => %{"items" => %{}, "type" => "array"}}}
-          }
+          "schema" => %{"properties" => %{"file" => %{"items" => %{}, "type" => "array"}}}
         }
       }
     }
@@ -955,7 +909,6 @@ defmodule Oasis.ValidatorTest do
         filename: "test2.png",
         path: "/var/tmp/path/2"
       }
-
 
     input = %{
       "file" => [upload1, upload2]

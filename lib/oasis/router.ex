@@ -11,9 +11,7 @@ defmodule Oasis.Router do
         private: %{
           path_schema: %{
             "id" => %{
-              "schema" => %ExJsonSchema.Schema.Root{
-                schema: %{"type" => "integer"}
-              }
+              "schema" => %{"type" => "integer"}
             }
           }
         }) do
@@ -63,7 +61,7 @@ defmodule Oasis.Router do
         parse_and_then_do_match(conn, conn.method, Plug.Router.Utils.decode_path_info!(conn))
       end
 
-      defoverridable [call: 2, match: 2]
+      defoverridable call: 2, match: 2
     end
   end
 

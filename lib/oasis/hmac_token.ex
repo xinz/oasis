@@ -148,12 +148,14 @@ defmodule Oasis.HMACToken do
     Base.encode64(:crypto.mac(:hmac, algorithm, secret, string_to_sign))
   end
 
-  defp values_of_req_headers(%Plug.Conn{req_headers: req_headers} = conn, signed_headers) when is_binary(signed_headers) do
+  defp values_of_req_headers(%Plug.Conn{req_headers: req_headers} = conn, signed_headers)
+       when is_binary(signed_headers) do
     signed_headers
     |> String.split(";")
     |> Enum.reduce([], fn
       "host", acc ->
         [conn.host | acc]
+
       header, acc ->
         case List.keyfind(req_headers, header, 0) do
           nil -> acc

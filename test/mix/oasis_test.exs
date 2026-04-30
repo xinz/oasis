@@ -207,7 +207,7 @@ defmodule Mix.OasisTest do
         assert router.plug_module == DeleteNameSpaceFromOperationObject.DeleteId
     end)
 
-    [router_file | plug_files] = Mix.Oasis.new(paths_spec2, [name_space: "From.Command"])
+    [router_file | plug_files] = Mix.Oasis.new(paths_spec2, name_space: "From.Command")
 
     {_, file_path, _, router_module_name, _} = router_file
 
@@ -218,12 +218,15 @@ defmodule Mix.OasisTest do
       {_, file_path, "pre_plug.ex", From.Command.PreGetId, router} ->
         assert file_path == "lib/from/command/pre_get_id.ex"
         assert router.plug_module == From.Command.GetId
+
       {_, file_path, "plug.ex", From.Command.GetId, router} ->
         assert file_path == "lib/from/command/get_id.ex"
         assert router.plug_module == From.Command.GetId
+
       {_, file_path, "pre_plug.ex", From.Command.PreDeleteId, router} ->
         assert file_path == "lib/from/command/pre_delete_id.ex"
         assert router.plug_module == From.Command.DeleteId
+
       {_, file_path, "plug.ex", From.Command.DeleteId, router} ->
         assert file_path == "lib/from/command/delete_id.ex"
         assert router.plug_module == From.Command.DeleteId
@@ -484,20 +487,20 @@ defmodule Mix.OasisTest do
         assert router.query_schema == nil and body_schema != nil
 
         schema = body_schema["content"]["application/json"]["schema"]
-        assert schema.__struct__ == ExJsonSchema.Schema.Root
+        assert is_map(schema)
 
-        assert ExJsonSchema.Validator.valid?(schema, %{"name" => "test-name"})
-        assert ExJsonSchema.Validator.valid?(schema, %{"tag" => "test-tag"}) == false
+        assert Oasis.JSONSchema.valid?(schema, %{"name" => "test-name"})
+        assert Oasis.JSONSchema.valid?(schema, %{"tag" => "test-tag"}) == false
 
         schema = body_schema["content"]["application/x-www-form-urlencoded"]["schema"]
-        assert schema.__struct__ == ExJsonSchema.Schema.Root
+        assert is_map(schema)
 
-        assert ExJsonSchema.Validator.valid?(schema, %{"name" => "test-name", "fav_number" => 1}) ==
+        assert Oasis.JSONSchema.valid?(schema, %{"name" => "test-name", "fav_number" => 1}) ==
                  true
 
-        assert ExJsonSchema.Validator.valid?(schema, %{"fav_number" => 1}) == false
+        assert Oasis.JSONSchema.valid?(schema, %{"fav_number" => 1}) == false
 
-        assert ExJsonSchema.Validator.valid?(schema, %{"name" => "test-name", "fav_number" => 10}) ==
+        assert Oasis.JSONSchema.valid?(schema, %{"name" => "test-name", "fav_number" => 10}) ==
                  false
 
       {_, file_path2, "plug.ex", Oasis.Gen.AddPet, router} ->
@@ -512,8 +515,8 @@ defmodule Mix.OasisTest do
 
         %{"id" => %{"schema" => schema}} = router.query_schema
 
-        assert ExJsonSchema.Validator.valid?(schema, 1) == false
-        assert ExJsonSchema.Validator.valid?(schema, ["a", "b", "c"]) == true
+        assert Oasis.JSONSchema.valid?(schema, 1) == false
+        assert Oasis.JSONSchema.valid?(schema, ["a", "b", "c"]) == true
 
       {_, file_path4, "plug.ex", Oasis.Gen.GetMyPost, router} ->
         assert file_path4 == "lib/oasis/gen/get_my_post.ex" and router.http_verb == "get" and
@@ -616,8 +619,8 @@ defmodule Mix.OasisTest do
         assert router.header_schema == nil and router.cookie_schema != nil
 
         %{"session_id" => %{"schema" => schema}} = router.cookie_schema
-        assert ExJsonSchema.Validator.valid?(schema, 1) == true
-        assert ExJsonSchema.Validator.valid?(schema, "abc") == false
+        assert Oasis.JSONSchema.valid?(schema, 1) == true
+        assert Oasis.JSONSchema.valid?(schema, "abc") == false
 
       {_, file_path, "plug.ex", Oasis.Gen.PutQueryPet, router} ->
         assert file_path == "lib/oasis/gen/put_query_pet.ex" and router.http_verb == "put"
@@ -630,11 +633,11 @@ defmodule Mix.OasisTest do
         %{"token" => %{"schema" => token_schema}, "appid" => %{"schema" => appid_schema}} =
           router.header_schema
 
-        assert ExJsonSchema.Validator.valid?(token_schema, "1") == true
-        assert ExJsonSchema.Validator.valid?(token_schema, 1) == false
+        assert Oasis.JSONSchema.valid?(token_schema, "1") == true
+        assert Oasis.JSONSchema.valid?(token_schema, 1) == false
 
-        assert ExJsonSchema.Validator.valid?(appid_schema, "abc") == true
-        assert ExJsonSchema.Validator.valid?(appid_schema, 100) == false
+        assert Oasis.JSONSchema.valid?(appid_schema, "abc") == true
+        assert Oasis.JSONSchema.valid?(appid_schema, 100) == false
 
         assert file_path == "lib/oasis/gen/pre_get_query_pet.ex" and router.http_verb == "get"
         assert router.header_schema != nil and router.cookie_schema == nil
@@ -648,12 +651,12 @@ defmodule Mix.OasisTest do
         assert router.path_schema != nil and router.query_schema != nil
 
         %{"id" => %{"schema" => schema}} = router.path_schema
-        assert ExJsonSchema.Validator.valid?(schema, 1) == true
-        assert ExJsonSchema.Validator.valid?(schema, "1") == false
+        assert Oasis.JSONSchema.valid?(schema, 1) == true
+        assert Oasis.JSONSchema.valid?(schema, "1") == false
 
         %{"tags" => %{"schema" => schema}} = router.query_schema
-        assert ExJsonSchema.Validator.valid?(schema, ["1", "2", "3"]) == true
-        assert ExJsonSchema.Validator.valid?(schema, "abc") == false
+        assert Oasis.JSONSchema.valid?(schema, ["1", "2", "3"]) == true
+        assert Oasis.JSONSchema.valid?(schema, "abc") == false
 
       {_, file_path, "plug.ex", Oasis.Gen.DeletePet, router} ->
         assert file_path == "lib/oasis/gen/delete_pet.ex" and router.http_verb == "delete"
@@ -766,7 +769,8 @@ defmodule Mix.OasisTest do
       }
     }
 
-    [_router, _pre_say_hello, _say_hello, bearer_auth_file] = Mix.Oasis.new(paths_spec, name_space: "Security.MyOpenAPI")
+    [_router, _pre_say_hello, _say_hello, bearer_auth_file] =
+      Mix.Oasis.new(paths_spec, name_space: "Security.MyOpenAPI")
 
     {_, path, template, module, binding} = bearer_auth_file
 
@@ -778,7 +782,7 @@ defmodule Mix.OasisTest do
     [content] = binding.security
     assert content =~ ~s/Oasis.Plug.BearerAuth/
     assert content =~ ~s/security: #{inspect(module)}/
-    assert (content =~ ~s/key_to_assigns:/) == false
+    assert content =~ ~s/key_to_assigns:/ == false
   end
 
   test "new/2 with bearer token and key to assigns" do
@@ -879,8 +883,7 @@ defmodule Mix.OasisTest do
 
     plugs_pairs
     |> Enum.chunk_every(3)
-    |> Enum.map(fn(files) ->
-
+    |> Enum.map(fn files ->
       [_pre_plug, plug, auth_file] = files
 
       {_, plug_path, _, _, _} = plug
@@ -947,7 +950,8 @@ defmodule Mix.OasisTest do
       }
     }
 
-    [_router, _pre_say_hello, _say_hello, bearer_auth_file] = Mix.Oasis.new(paths_spec, name_space: "Security.MyOpenAPI")
+    [_router, _pre_say_hello, _say_hello, bearer_auth_file] =
+      Mix.Oasis.new(paths_spec, name_space: "Security.MyOpenAPI")
 
     {_, path, template, module, binding} = bearer_auth_file
 
@@ -959,7 +963,7 @@ defmodule Mix.OasisTest do
     [content] = binding.security
     assert content =~ ~s/Oasis.Plug.BearerAuth/
     assert content =~ ~s/security: #{inspect(module)}/
-    assert (content =~ ~s/key_to_assigns:/) == false
+    assert content =~ ~s/key_to_assigns:/ == false
   end
 
   test "new/2 with not supported security scheme" do

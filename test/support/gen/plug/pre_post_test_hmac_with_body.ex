@@ -17,9 +17,7 @@ defmodule Oasis.Gen.Plug.PrePostTestHMACWithBody do
     body_schema: %{
       "content" => %{
         "application/json" => %{
-          "schema" => %ExJsonSchema.Schema.Root{
-            schema: %{"properties" => %{"a" => %{"type" => "string"}}, "type" => "object"}
-          }
+          "schema" => %{"properties" => %{"a" => %{"type" => "string"}}, "type" => "object"}
         }
       }
     }
