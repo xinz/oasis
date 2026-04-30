@@ -100,11 +100,11 @@ defmodule Oasis.Validator do
           {:ok, ^parsed} ->
             parsed
 
-          {:error, %JSONSchema.Error{} = error} ->
+          {:error, %JSONSchex.Types.Error{} = error} ->
             raise BadRequestError,
               error: %BadRequestError.JsonSchemaValidationFailed{
                 error: error,
-                path: error.path_pointer
+                path: JSONSchema.path_pointer(error)
               },
               use_in: use_in,
               param_name: param_name,
@@ -131,7 +131,10 @@ defmodule Oasis.Validator do
   defp recheck_after_validate({:ok, parsed}), do: {:ok, parsed}
 
   defp recheck_after_validate({{:error, errors}, parsed}) do
-    errors = Enum.filter(errors, &error_to_attention?(&1, parsed))
+    errors =
+      errors
+      |> Enum.filter(&error_to_attention?(&1, parsed))
+      |> Enum.sort_by(fn error -> {List.wrap(error.path), error_priority(error.rule)} end)
 
     case errors do
       [] ->
@@ -142,17 +145,17 @@ defmodule Oasis.Validator do
     end
   end
 
-  defp error_to_attention?(%JSONSchema.Error{} = error, parsed) do
+  defp error_to_attention?(%JSONSchex.Types.Error{} = error, parsed) do
     not ignore_upload_error?(error, parsed)
   end
 
   defp error_to_attention?(_error, _parsed), do: true
 
-  defp ignore_upload_error?(%JSONSchema.Error{rule: :type, path_segments: path} = error, parsed) do
-    case value_in_path(path, parsed) do
+  defp ignore_upload_error?(%JSONSchex.Types.Error{rule: :type, path: path, context: context}, parsed) do
+    case value_in_path(List.wrap(path), parsed) do
       %Plug.Upload{} ->
         # ignore `Plug.Upload` failed in json schema validation
-        List.wrap(error.expected) == ["string"] and error.actual in ["object", "map"]
+        Map.get(context, :contrast) == "string" and Map.get(context, :input) in ["object", "map"]
 
       _ ->
         false
@@ -160,6 +163,11 @@ defmodule Oasis.Validator do
   end
 
   defp ignore_upload_error?(_error, _parsed), do: false
+
+  defp error_priority(:type), do: 0
+  defp error_priority(:required), do: 1
+  defp error_priority(:dependentRequired), do: 1
+  defp error_priority(_rule), do: 9
 
   defp value_in_path([], parsed), do: parsed
 

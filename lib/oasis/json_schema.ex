@@ -1,36 +1,45 @@
 defmodule Oasis.JSONSchema do
   @moduledoc false
 
-  alias __MODULE__.Error
+  @default_compile_options [format_assertion: true, content_assertion: false]
 
-  defstruct [:schema, :compiled, engine: :ex_json_schema, options: []]
+  defstruct [:schema, :compiled, engine: :jsonschex, options: []]
 
   @opaque t :: %__MODULE__{
             schema: map(),
-            compiled: term(),
+            compiled: JSONSchex.Types.Schema.t(),
             engine: atom(),
             options: keyword()
           }
 
   @type schema_ref :: t() | ExJsonSchema.Schema.Root.t() | map()
 
-  @spec compile(map(), keyword()) :: {:ok, t()}
+  @spec compile(map(), keyword()) :: {:ok, t()} | {:error, JSONSchex.Types.Error.t()}
   def compile(schema, opts \\ []) when is_map(schema) and not is_struct(schema) do
-    compiled = ExJsonSchema.Schema.resolve(schema, opts)
-    {:ok, %__MODULE__{schema: schema, compiled: compiled, options: opts}}
+    compile_options = compile_options(opts)
+
+    case JSONSchex.compile(schema, compile_options) do
+      {:ok, compiled} ->
+        {:ok, %__MODULE__{schema: schema, compiled: compiled, options: compile_options}}
+
+      {:error, %JSONSchex.Types.Error{} = error} ->
+        {:error, error}
+    end
   end
 
   @spec compile!(map(), keyword()) :: t()
   def compile!(schema, opts \\ []) do
-    {:ok, compiled} = compile(schema, opts)
-    compiled
+    case compile(schema, opts) do
+      {:ok, compiled} -> compiled
+      {:error, error} -> raise ArgumentError, JSONSchex.format_error(error)
+    end
   end
 
   @spec wrap(schema_ref()) :: t()
   def wrap(%__MODULE__{} = schema), do: schema
 
-  def wrap(%ExJsonSchema.Schema.Root{schema: schema} = compiled) do
-    %__MODULE__{schema: schema, compiled: compiled}
+  def wrap(%ExJsonSchema.Schema.Root{schema: schema}) do
+    compile!(schema)
   end
 
   def wrap(schema) when is_map(schema) and not is_struct(schema) do
@@ -42,17 +51,10 @@ defmodule Oasis.JSONSchema do
   def raw_schema(%ExJsonSchema.Schema.Root{schema: schema}), do: schema
   def raw_schema(schema) when is_map(schema) and not is_struct(schema), do: schema
 
-  @spec validate(schema_ref(), term()) :: :ok | {:error, [Error.t()]}
+  @spec validate(schema_ref(), term()) :: :ok | {:error, [JSONSchex.Types.Error.t()]}
   def validate(schema, data) do
     schema = wrap(schema)
-
-    case ExJsonSchema.Validator.validate(schema.compiled, data, error_formatter: false) do
-      :ok ->
-        :ok
-
-      {:error, errors} ->
-        {:error, Enum.map(errors, &Error.from_validation_error/1)}
-    end
+    JSONSchex.validate(schema.compiled, data)
   end
 
   @spec valid?(schema_ref(), term()) :: boolean()
@@ -60,6 +62,31 @@ defmodule Oasis.JSONSchema do
     validate(schema, data) == :ok
   end
 
-  @spec format_error(Error.t()) :: String.t()
-  def format_error(%Error{message: message}), do: message
+  @spec format_error(JSONSchex.Types.Error.t()) :: String.t()
+  def format_error(%JSONSchex.Types.Error{} = error), do: JSONSchex.format_error(error)
+
+  @spec path_pointer(JSONSchex.Types.Error.t()) :: String.t()
+  def path_pointer(%JSONSchex.Types.Error{path: path}) do
+    case List.wrap(path) do
+      [] ->
+        "#"
+
+      segments ->
+        encoded = Enum.map_join(segments, "/", &encode_segment/1)
+        "#/#{encoded}"
+    end
+  end
+
+  defp compile_options(opts) do
+    Keyword.merge(@default_compile_options, opts)
+  end
+
+  defp encode_segment(segment) when is_integer(segment), do: Integer.to_string(segment)
+
+  defp encode_segment(segment) do
+    segment
+    |> to_string()
+    |> String.replace("~", "~0")
+    |> String.replace("/", "~1")
+  end
 end

@@ -3,8 +3,10 @@
 ## Unreleased
 
 * Add root-level `JSONSCHEX_REFACTOR_PLAN.md` as the working migration spec for replacing `ex_json_schema` with `jsonschex`
-* Add initial schema boundary modules: `Oasis.JSONSchema`, `Oasis.JSONSchema.Error`, and `Oasis.Spec.RefResolver`
+* Add initial schema boundary modules: `Oasis.JSONSchema` and `Oasis.Spec.RefResolver`
 * Refactor `Oasis.Spec.read/1` to return `Oasis.Spec.Document` and remove `ExJsonSchema.Schema.Root` from the spec loading pipeline
+* Add `jsonschex` and switch `Oasis.JSONSchema` runtime compilation/validation directly to JSON Schema Draft 2020-12
+* Update validator and integration tests to assert `jsonschex` error messages directly
 
 ## v0.6.0 (2026-01-29)
 

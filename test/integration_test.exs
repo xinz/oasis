@@ -147,7 +147,7 @@ defmodule Oasis.IntegrationTest do
              |> Finch.request(TestFinch)
 
     assert response.body ==
-             "Find query parameter `lang` with error: Expected the value to be >= 10"
+             "Find query parameter `lang` with error: Value 9 is less than minimum 10"
 
     lang = 21
     query_string = URI.encode_query(lang: lang)
@@ -157,7 +157,7 @@ defmodule Oasis.IntegrationTest do
              |> Finch.request(TestFinch)
 
     assert response.body ==
-             "Find query parameter `lang` with error: Expected the value to be <= 20"
+             "Find query parameter `lang` with error: Value 21 is greater than maximum 20"
   end
 
   test "parse boolean query parameter", %{url: url} do
@@ -189,7 +189,7 @@ defmodule Oasis.IntegrationTest do
              |> Finch.request(TestFinch)
 
     assert response.body ==
-             "Find query parameter `all` with error: Type mismatch. Expected Boolean but got String."
+             "Find query parameter `all` with error: Expected type boolean, got string"
   end
 
   test "parse json in query parameter", %{url: url} do
@@ -228,7 +228,7 @@ defmodule Oasis.IntegrationTest do
 
     assert response.status == 400 and
              response.body ==
-               "Find query parameter `profile` with error: Type mismatch. Expected Integer but got String."
+               "Find query parameter `profile` with error: At /tag: Expected type integer, got string"
   end
 
   test "parse array header parameter", %{url: url} do
@@ -260,7 +260,7 @@ defmodule Oasis.IntegrationTest do
 
     assert response.status == 400 and
              response.body ==
-               "Find header parameter `items` with error: Type mismatch. Expected Integer but got String."
+               "Find header parameter `items` with error: At /0: Expected type integer, got string"
   end
 
   test "missing required header parameter", %{url: url} do
@@ -387,7 +387,7 @@ defmodule Oasis.IntegrationTest do
              |> Finch.request(TestFinch)
 
     assert response.status == 400 and
-             response.body == "Find body parameter `body_request` with error: Expected the value to be >= 1"
+             response.body == "Find body parameter `body_request` with error: At /fav_number: Value 0 is less than minimum 1"
   end
 
   test "post multipart/formdata", %{url: url} do
@@ -434,7 +434,7 @@ defmodule Oasis.IntegrationTest do
 
     assert response.status == 400 and
              response.body ==
-               "Find body parameter `body_request` with error: Expected the value to be <= 10"
+               "Find body parameter `body_request` with error: At /id: Value 20 is greater than maximum 10"
   end
 
   test "post multipart/mixed", %{url: url} do
@@ -491,7 +491,7 @@ defmodule Oasis.IntegrationTest do
 
     assert response.status == 400 and
              response.body ==
-               "Find body parameter `body_request` with error: Required property addresses was not present."
+               "Find body parameter `body_request` with error: Missing required properties: addresses"
   end
 
   test "post application/json with non object type", %{url: url} do
@@ -501,8 +501,9 @@ defmodule Oasis.IntegrationTest do
     body = "[{\"id2\":1,\"name2\":\"hello\"}]"
 
     assert {:ok, response} = Finch.build(:post, "#{url}/test_post_json", headers, body) |> Finch.request(TestFinch)
-    assert response.status == 400 and
-             response.body == "Find body parameter `body_request` with error: Required properties id, name were not present."
+    assert response.status == 400
+    assert response.body =~ "Find body parameter `body_request` with error:"
+    assert response.body =~ "Missing required properties: id, name"
 
     body = "[{\"id\":1,\"name\":\"hello\"}]"
 
@@ -539,7 +540,8 @@ defmodule Oasis.IntegrationTest do
     body = "{\"_json\":{\"street_name\":\"S1\", \"street_type\":\"Avenue2\"}}"
 
     assert {:ok, response} = Finch.build(:post, "#{url}/test_post_json", headers, body) |> Finch.request(TestFinch)
-    assert response.body == "Find body parameter `body_request` with error: Value is not allowed in enum."
+    assert response.body ==
+             "Find body parameter `body_request` with error: At /_json/street_type: Value \"Avenue2\" is not in the allowed list: [\"Street\", \"Avenue\", \"Boulevard\"]"
 
     body = "{\"_json\":{\"street_name\":\"S1\", \"id\":\"1\", \"street_type\":\"Avenue\"}}"
     assert {:ok, response} = Finch.build(:post, "#{url}/test_post_json", headers, body) |> Finch.request(TestFinch)
@@ -567,7 +569,7 @@ defmodule Oasis.IntegrationTest do
              |> Finch.request(TestFinch)
 
     assert response.body ==
-             "Find query parameter `relation_ids` with error: Type mismatch. Expected String but got Integer."
+             "Find query parameter `relation_ids` with error: At /0: Expected type string, got integer"
 
     query_string = URI.encode_query(id: 1, relation_ids: Jason.encode!(["1", "2", "3"]))
 
@@ -652,7 +654,7 @@ defmodule Oasis.IntegrationTest do
     {:ok, response} = Finch.build(:post, "#{url}/sign_bearer_auth", headers, body) |> Finch.request(TestFinch)
 
     assert response.status == 400
-    assert response.body =~ ~s/Required property username was not present/
+    assert response.body =~ ~s/Missing required properties: username/
   end
 
   test "expire bearer auth", %{url: url} do
@@ -726,7 +728,7 @@ defmodule Oasis.IntegrationTest do
              |> Finch.request(TestFinch)
 
     assert response.status == 400 and
-             response.body == "Find body parameter `body_request` with error: Type mismatch. Expected Integer but got String."
+             response.body == "Find body parameter `body_request` with error: At /id: Expected type integer, got string"
   end
 
   test "verify hmac auth host only", %{url: url} do

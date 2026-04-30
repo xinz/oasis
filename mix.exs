@@ -40,6 +40,7 @@ defmodule Oasis.MixProject do
       {:plug, "~> 1.11"},
       {:plug_crypto, "~> 1.2"},
       {:jason, "~> 1.2"},
+      {:jsonschex, "~> 0.5"},
       {:ex_json_schema, "~> 0.7"},
       {:recase, "~> 0.7", runtime: false},
       {:plug_cowboy, "~> 2.0", only: [:dev, :test]},

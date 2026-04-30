@@ -12,36 +12,18 @@ defmodule Oasis.JSONSchemaTest do
     refute JSONSchema.valid?(schema, "2")
   end
 
-  test "wrap existing compiled schemas" do
-    root = ExJsonSchema.Schema.resolve(%{"type" => "string"})
-    schema = JSONSchema.wrap(root)
+  test "formats JSONSchex validation errors" do
+    schema = JSONSchema.compile!(%{"type" => "string", "minLength" => 3})
 
-    assert JSONSchema.raw_schema(schema) == %{"type" => "string"}
-    assert JSONSchema.valid?(schema, "hello")
+    assert {:error, [error]} = JSONSchema.validate(schema, "a")
+    assert error.rule in [:minLength, :min_length]
+    assert JSONSchema.path_pointer(error) == "#"
+    assert JSONSchema.format_error(error) =~ "less than minimum 3"
   end
 
-  test "normalize validation errors" do
-    schema =
-      JSONSchema.compile!(%{
-        "type" => "object",
-        "properties" => %{
-          "avatar" => %{"type" => "string"}
-        }
-      })
-
-    upload = %Plug.Upload{
-      content_type: "image/png",
-      filename: "avatar.png",
-      path: "/tmp/avatar.png"
-    }
-
-    assert {:error, [error]} = JSONSchema.validate(schema, %{"avatar" => upload})
-
-    assert error.rule == :type
-    assert error.path_pointer == "#/avatar"
-    assert error.path_segments == ["avatar"]
-    assert error.expected == ["string"]
-    assert error.actual == "object"
-    assert JSONSchema.format_error(error) =~ "Expected"
+  test "compilation errors bubble up from JSONSchex" do
+    assert_raise ArgumentError, ~r/Keyword `?type`? must be one of|Keyword 'type' must be one of/, fn ->
+      JSONSchema.compile!(%{"type" => "UNKNOWN_JSON_SCHEMA"})
+    end
   end
 end
