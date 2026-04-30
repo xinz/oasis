@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+* Add root-level `JSONSCHEX_REFACTOR_PLAN.md` as the working migration spec for replacing `ex_json_schema` with `jsonschex`
+* Add initial schema boundary modules: `Oasis.JSONSchema`, `Oasis.JSONSchema.Error`, and `Oasis.Spec.RefResolver`
+
 ## v0.6.0 (2026-01-29)
 
 * Fix compile fail `inspect_as_struct` in Elixir 1.19

@@ -41,8 +41,8 @@ defmodule Oasis do
       @moduledoc """
       This error is used to indicate could not pass the validation of the defined json schema.
 
-      This module is an equivalent replacement to `ExJsonSchema.Validator.Error`, we could see more detailed information
-      in the `:error` field be with `"ExJsonSchema.Validator.Error.*"` modules.
+      The `:error` field contains an `Oasis.JSONSchema.Error` value so Oasis can preserve a stable
+      internal error shape independently from the underlying JSON Schema engine.
       """
       defstruct [:error, :path]
     end

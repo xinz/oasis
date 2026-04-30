@@ -1,7 +1,7 @@
 defmodule Oasis.Validator do
   @moduledoc false
 
-  alias Oasis.BadRequestError
+  alias Oasis.{BadRequestError, JSONSchema}
 
   @spec parse_and_validate!(
           param :: map() | nil,
@@ -61,18 +61,23 @@ defmodule Oasis.Validator do
     |> process_media_type(media_type, use_in, name, value)
   end
 
-  defp do_parse_and_validate!(%{schema: %{"type" => type}} = json_schema_root, "body", param_name, %{"_json" => value})
-    when type == "string" and is_bitstring(value)
-    when type == "number" and is_number(value)
-    when type == "integer" and is_integer(value)
-    when type == "array" and is_list(value)
-    when type == "boolean" and is_boolean(value) do
-    # Since `Plug.Parsers.JSON` parses a non-map body content into a "_json" key to allow proper param merging, here
-    # will unwrap the "_json" key and format the input body params as a matched type to the defined OpenAPI specification.
-    do_parse_and_validate!(json_schema_root, "body", param_name, value)
+  defp do_parse_and_validate!(json_schema_root, "body", param_name, %{"_json" => value} = wrapped_value) do
+    if unwrap_json_body?(json_schema_root, value) do
+      # Since `Plug.Parsers.JSON` parses a non-map body content into a "_json" key to allow proper param merging, here
+      # will unwrap the "_json" key and format the input body params as a matched type to the defined OpenAPI specification.
+      do_parse_and_validate!(json_schema_root, "body", param_name, value)
+    else
+      do_parse_and_validate_value!(json_schema_root, "body", param_name, wrapped_value)
+    end
   end
 
-  defp do_parse_and_validate!(%{schema: schema} = json_schema_root, use_in, param_name, value) do
+  defp do_parse_and_validate!(json_schema_root, use_in, param_name, value) do
+    do_parse_and_validate_value!(json_schema_root, use_in, param_name, value)
+  end
+
+  defp do_parse_and_validate_value!(json_schema_root, use_in, param_name, value) do
+    schema = JSONSchema.raw_schema(json_schema_root)
+
     try do
       Oasis.Parser.parse(schema, value)
     rescue
@@ -94,52 +99,79 @@ defmodule Oasis.Validator do
         case result do
           {:ok, ^parsed} ->
             parsed
-          {:error, %ExJsonSchema.Validator.Error{error: error, path: path}} ->
+
+          {:error, %JSONSchema.Error{} = error} ->
             raise BadRequestError,
-              error: %BadRequestError.JsonSchemaValidationFailed{error: error, path: path},
+              error: %BadRequestError.JsonSchemaValidationFailed{
+                error: error,
+                path: error.path_pointer
+              },
               use_in: use_in,
               param_name: param_name,
-              message: "Failed to validate JSON schema with an error: #{to_string(error)}"
+              message: "Failed to validate JSON schema with an error: #{JSONSchema.format_error(error)}"
         end
     end
   end
 
+  defp unwrap_json_body?(json_schema_root, value) do
+    case JSONSchema.raw_schema(json_schema_root) do
+      %{"type" => "string"} -> is_bitstring(value)
+      %{"type" => "number"} -> is_number(value)
+      %{"type" => "integer"} -> is_integer(value)
+      %{"type" => "array"} -> is_list(value)
+      %{"type" => "boolean"} -> is_boolean(value)
+      _ -> false
+    end
+  end
 
   defp json_schema_validate(json_schema_root, parsed) do
-    {
-      ExJsonSchema.Validator.validate(json_schema_root, parsed, error_formatter: false),
-      parsed
-    }
+    {JSONSchema.validate(json_schema_root, parsed), parsed}
   end
 
   defp recheck_after_validate({:ok, parsed}), do: {:ok, parsed}
+
   defp recheck_after_validate({{:error, errors}, parsed}) do
-    errors = Enum.filter(errors, fn %{error: error, path: path} ->
-      error_to_attention?(error, path, parsed)
-    end)
+    errors = Enum.filter(errors, &error_to_attention?(&1, parsed))
 
     case errors do
       [] ->
         {:ok, parsed}
+
       [error | _] ->
         {:error, error}
     end
   end
 
-  defp error_to_attention?(%ExJsonSchema.Validator.Error.Type{actual: "object", expected: ["string"]}, path, parsed) do
+  defp error_to_attention?(%JSONSchema.Error{} = error, parsed) do
+    not ignore_upload_error?(error, parsed)
+  end
+
+  defp error_to_attention?(_error, _parsed), do: true
+
+  defp ignore_upload_error?(%JSONSchema.Error{rule: :type, path_segments: path} = error, parsed) do
     case value_in_path(path, parsed) do
       %Plug.Upload{} ->
         # ignore `Plug.Upload` failed in json schema validation
-        false
+        List.wrap(error.expected) == ["string"] and error.actual in ["object", "map"]
+
       _ ->
-        true
+        false
     end
   end
-  defp error_to_attention?(_error, _path, _parsed), do: true
 
-  defp value_in_path("#/" <> path, parsed) when is_map(parsed) do
-    get_in(parsed, String.split(path, "/"))
+  defp ignore_upload_error?(_error, _parsed), do: false
+
+  defp value_in_path([], parsed), do: parsed
+
+  defp value_in_path([segment | rest], parsed) when is_map(parsed) do
+    value_in_path(rest, Map.get(parsed, segment))
   end
+
+  defp value_in_path([segment | rest], parsed) when is_list(parsed) and is_integer(segment) do
+    value_in_path(rest, Enum.at(parsed, segment))
+  end
+
+  defp value_in_path(_path, _parsed), do: nil
 
   defp process_media_type(
          "text/plain" <> _charset,
