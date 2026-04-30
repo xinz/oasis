@@ -1,6 +1,8 @@
 defmodule Oasis.Spec.UtilsTest do
   use ExUnit.Case
 
+  alias Oasis.Spec.Document
+
   test "expand $ref" do
     yaml_str = """
       components:
@@ -58,9 +60,9 @@ defmodule Oasis.Spec.UtilsTest do
 
     {:ok, data} = YamlElixir.read_from_string(yaml_str)
 
-    root = ExJsonSchema.Schema.resolve(data) |> Oasis.Spec.Utils.expand_ref()
+    root = data |> Document.new() |> Oasis.Spec.Utils.expand_ref()
 
-    assert root.__struct__ == ExJsonSchema.Schema.Root
+    assert root.__struct__ == Oasis.Spec.Document
 
     schema = root.schema
 
@@ -156,9 +158,8 @@ defmodule Oasis.Spec.UtilsTest do
 
     {:ok, data} = YamlElixir.read_from_string(yaml_str)
 
-    root = ExJsonSchema.Schema.resolve(data) |> Oasis.Spec.Utils.expand_ref()
+    root = data |> Document.new() |> Oasis.Spec.Utils.expand_ref()
 
-    # After upgrade `ex_json_schema` to 0.11.*
     # If the `$ref` is present, all other sibling properties are ignored after resolved.
     params = get_in(root.schema, ["paths", "/test1", "get", "parameters"])
     assert Enum.at(params, 0)["name"] == "lang"
@@ -194,7 +195,7 @@ defmodule Oasis.Spec.UtilsTest do
 
     {:ok, data} = YamlElixir.read_from_string(yaml_str)
 
-    root = ExJsonSchema.Schema.resolve(data) |> Oasis.Spec.Utils.expand_ref()
+    root = data |> Document.new() |> Oasis.Spec.Utils.expand_ref()
 
     params = get_in(root.schema, ["paths", "/test1", "get", "parameters"])
     assert length(params) == 1 and Enum.at(params, 0)["name"] == "lang"

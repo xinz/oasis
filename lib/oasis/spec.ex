@@ -4,38 +4,39 @@ defmodule Oasis.Spec do
   require Logger
 
   alias __MODULE__
+  alias __MODULE__.Document
 
   def read(path) do
     path
     |> extract_path_suffix()
     |> read_file()
-    |> build_json_schema()
+    |> build_document()
   end
 
-  defp build_json_schema({:ok, data}) do
+  defp build_document({:ok, {data, opts}}) do
     data
-    |> ExJsonSchema.Schema.resolve()
+    |> Document.new(opts)
     |> Spec.Utils.expand_ref()
     |> Spec.Path.build()
   end
 
-  defp build_json_schema({:error, %YamlElixir.FileNotFoundError{message: message}}) do
+  defp build_document({:error, %YamlElixir.FileNotFoundError{message: message}}) do
     {:error, %Oasis.FileNotFoundError{message: message}}
   end
 
-  defp build_json_schema({:error, %YamlElixir.ParsingError{message: message}}) do
+  defp build_document({:error, %YamlElixir.ParsingError{message: message}}) do
     {:error, %Oasis.InvalidSpecError{message: "Failed to parse yaml file: #{message}"}}
   end
 
-  defp build_json_schema({:error, %Oasis.FileNotFoundError{} = error}) do
+  defp build_document({:error, %Oasis.FileNotFoundError{} = error}) do
     {:error, error}
   end
 
-  defp build_json_schema({:error, %Oasis.InvalidSpecError{} = error}) do
+  defp build_document({:error, %Oasis.InvalidSpecError{} = error}) do
     {:error, error}
   end
 
-  defp build_json_schema({:error, %Jason.DecodeError{data: data}}) do
+  defp build_document({:error, %Jason.DecodeError{data: data}}) do
     {:error, %Oasis.InvalidSpecError{message: "Failed to parse json file: `#{data}`"}}
   end
 
@@ -45,13 +46,19 @@ defmodule Oasis.Spec do
   end
 
   defp read_file({type, path}) when type == "yaml" or type == ".yml" do
-    YamlElixir.read_from_file(path)
+    case YamlElixir.read_from_file(path) do
+      {:ok, data} -> {:ok, {data, [source_path: path, format: type]}}
+      {:error, _reason} = error -> error
+    end
   end
 
   defp read_file({"json", path}) do
     case File.read(path) do
       {:ok, content} ->
-        Jason.decode(content)
+        case Jason.decode(content) do
+          {:ok, data} -> {:ok, {data, [source_path: path, format: "json"]}}
+          {:error, _reason} = error -> error
+        end
 
       {:error, posix} ->
         {:error,

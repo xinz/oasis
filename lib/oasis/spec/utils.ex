@@ -1,14 +1,14 @@
 defmodule Oasis.Spec.Utils do
   @moduledoc false
 
-  alias Oasis.Spec.RefResolver
+  alias Oasis.Spec.{Document, RefResolver}
 
-  @type json_schema_root :: ExJsonSchema.Schema.Root.t()
+  @type schema_container :: Document.t() | %{schema: map()}
 
   @doc """
   Expand and place all `$ref` properties with the corresponding fragments.
   """
-  @spec expand_ref(json_schema_root) :: json_schema_root
+  @spec expand_ref(schema_container) :: schema_container
   def expand_ref(%{schema: schema} = root) do
     %{root | schema: RefResolver.expand_local_refs(schema)}
   end
