@@ -4,7 +4,7 @@ defmodule Oasis.Spec do
   require Logger
 
   alias __MODULE__
-  alias __MODULE__.Document
+  alias __MODULE__.{Document, RefResolver}
 
   def read(path) do
     path
@@ -16,7 +16,7 @@ defmodule Oasis.Spec do
   defp build_document({:ok, {data, opts}}) do
     data
     |> Document.new(opts)
-    |> Spec.Utils.expand_ref()
+    |> expand_refs()
     |> Spec.Path.build()
   end
 
@@ -38,6 +38,10 @@ defmodule Oasis.Spec do
 
   defp build_document({:error, %Jason.DecodeError{data: data}}) do
     {:error, %Oasis.InvalidSpecError{message: "Failed to parse json file: `#{data}`"}}
+  end
+
+  defp expand_refs(%Document{schema: schema} = document) do
+    %{document | schema: RefResolver.expand_local_refs(schema)}
   end
 
   defp extract_path_suffix(path) do

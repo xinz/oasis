@@ -10,9 +10,18 @@ defmodule Oasis.Spec.RefResolver do
 
   @spec resolve_local_ref!(map(), String.t()) :: term()
   def resolve_local_ref!(document, ref) when is_map(document) and is_binary(ref) do
-    ref
-    |> pointer_segments!()
-    |> Enum.reduce(document, &resolve_segment!/2)
+    validate_local_ref!(ref)
+
+    case ExJSONPointer.resolve(document, ref) do
+      {:ok, resolved} ->
+        resolved
+
+      {:error, "not found"} ->
+        raise InvalidSpecError, "Could not resolve local ref `#{ref}`"
+
+      {:error, _reason} ->
+        raise InvalidSpecError, "Expect a local JSON Pointer ref, but got: `#{ref}`"
+    end
   end
 
   defp expand_value(document, value) when is_list(value) do
@@ -38,45 +47,10 @@ defmodule Oasis.Spec.RefResolver do
 
   defp expand_value(_document, value), do: value
 
-  defp pointer_segments!("#"), do: []
+  defp validate_local_ref!("#"), do: :ok
+  defp validate_local_ref!("#/" <> _path), do: :ok
 
-  defp pointer_segments!("#/" <> path) do
-    path
-    |> String.split("/", trim: true)
-    |> Enum.map(&decode_segment/1)
-  end
-
-  defp pointer_segments!(ref) do
+  defp validate_local_ref!(ref) do
     raise InvalidSpecError, "Expect a local JSON Pointer ref, but got: `#{ref}`"
-  end
-
-  defp resolve_segment!(segment, value) when is_map(value) do
-    case Map.fetch(value, segment) do
-      {:ok, resolved} -> resolved
-      :error -> raise InvalidSpecError, "Could not resolve local ref segment `#{segment}`"
-    end
-  end
-
-  defp resolve_segment!(segment, value) when is_list(value) and is_integer(segment) do
-    case Enum.fetch(value, segment) do
-      {:ok, resolved} -> resolved
-      :error -> raise InvalidSpecError, "Could not resolve local ref index `#{segment}`"
-    end
-  end
-
-  defp resolve_segment!(segment, _value) do
-    raise InvalidSpecError, "Could not resolve local ref segment `#{segment}`"
-  end
-
-  defp decode_segment(segment) do
-    decoded =
-      segment
-      |> String.replace("~1", "/")
-      |> String.replace("~0", "~")
-
-    case Integer.parse(decoded) do
-      {index, ""} -> index
-      _ -> decoded
-    end
   end
 end

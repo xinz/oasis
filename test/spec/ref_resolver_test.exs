@@ -3,6 +3,133 @@ defmodule Oasis.Spec.RefResolverTest do
 
   alias Oasis.Spec.RefResolver
 
+  test "expand nested local refs across schemas parameters and request bodies" do
+    yaml_str = """
+      components:
+        parameters:
+          ContentQueryParam:
+            name: content
+            in: query
+            schema:
+              $ref: "#/components/schemas/Contents"
+        schemas:
+          Content:
+            type: object
+            required:
+              - name
+              - tags
+            properties:
+              name:
+                type: string
+              tags:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Tag"
+          Contents:
+            type: array
+            items:
+              $ref: "#/components/schemas/Content"
+          Tag:
+            type: string
+      paths:
+        /page:
+          get:
+            parameters:
+              - $ref: "#/components/parameters/ContentQueryParam"
+            responses:
+              '200':
+                description: callback successfully processed
+        /contents:
+          get:
+            parameters:
+              - $ref: "#/components/parameters/ContentQueryParam"
+            responses:
+              '200':
+                description: callback successfully processed
+          post:
+            requestBody:
+              description: Callback payload
+              content:
+                'application/json':
+                  schema:
+                    $ref: '#/components/schemas/Contents'
+            responses:
+              '200':
+                description: callback successfully processed
+    """
+
+    {:ok, document} = YamlElixir.read_from_string(yaml_str)
+
+    expanded = RefResolver.expand_local_refs(document)
+
+    comp_schemas = get_in(expanded, ["components", "schemas"])
+
+    ref_tag = get_in(comp_schemas, ["Content", "properties", "tags", "items"])
+
+    assert ref_tag == %{"type" => "string"}
+
+    ref_contents = get_in(comp_schemas, ["Contents", "items"])
+
+    content = %{
+      "type" => "object",
+      "required" => ["name", "tags"],
+      "properties" => %{
+        "name" => %{"type" => "string"},
+        "tags" => %{
+          "type" => "array",
+          "items" => %{"type" => "string"}
+        }
+      }
+    }
+
+    assert ref_contents == content
+
+    comp_params = get_in(expanded, ["components", "parameters"])
+
+    content_query_param = get_in(comp_params, ["ContentQueryParam"])
+
+    assert content_query_param["schema"] == %{
+             "type" => "array",
+             "items" => content
+           }
+
+    page_path_get = get_in(expanded, ["paths", "/page", "get"])
+    common_content_params = page_path_get["parameters"]
+
+    assert length(common_content_params) == 1
+
+    content_param = Enum.at(common_content_params, 0)
+
+    assert content_param["name"] == "content" and
+             content_param["in"] == "query"
+
+    contents_path_post_request_body_schema =
+      get_in(expanded, [
+        "paths",
+        "/contents",
+        "post",
+        "requestBody",
+        "content",
+        "application/json",
+        "schema"
+      ])
+
+    assert contents_path_post_request_body_schema == %{
+             "type" => "array",
+             "items" => content
+           }
+
+    contents_path_get = get_in(expanded, ["paths", "/contents", "get"])
+    common_content_params = contents_path_get["parameters"]
+
+    assert length(common_content_params) == 1
+
+    content_param = Enum.at(common_content_params, 0)
+
+    assert content_param["name"] == "content" and
+             content_param["in"] == "query"
+  end
+
   test "resolve local refs through maps and arrays" do
     document = %{
       "components" => %{

@@ -3,7 +3,11 @@ defmodule Oasis.Spec.PathTest do
 
   import Oasis.Test.Support.Spec
 
-  alias Oasis.Spec.{Path, Utils}
+  alias Oasis.Spec.{Path, RefResolver}
+
+  defp expand_refs(%Oasis.Spec.Document{schema: schema} = document) do
+    %{document | schema: RefResolver.expand_local_refs(schema)}
+  end
 
   test "format url" do
     url = "/{a}"
@@ -85,7 +89,7 @@ defmodule Oasis.Spec.PathTest do
     root =
       yaml_str
       |> yaml_to_json_schema()
-      |> Utils.expand_ref()
+      |> expand_refs()
       |> Path.build()
 
     # the returned parameters by `name` property in asc order
@@ -484,7 +488,7 @@ defmodule Oasis.Spec.PathTest do
                   $ref: '#/components/schemas/RefreshTokenForm'
     """
 
-    %{schema: schema} = yaml_to_json_schema(yaml_str) |> Utils.expand_ref() |> Path.build()
+    %{schema: schema} = yaml_to_json_schema(yaml_str) |> expand_refs() |> Path.build()
     components = schema["components"]
 
     content_schema =
@@ -580,7 +584,7 @@ defmodule Oasis.Spec.PathTest do
               - username
     """
 
-    %{schema: schema} = yaml_to_json_schema(yaml_str) |> Utils.expand_ref() |> Path.build()
+    %{schema: schema} = yaml_to_json_schema(yaml_str) |> expand_refs() |> Path.build()
 
     security_schemes = Oasis.Spec.Security.security_schemes(schema)
 
