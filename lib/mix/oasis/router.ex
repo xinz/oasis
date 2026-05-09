@@ -154,7 +154,7 @@ defmodule Mix.Oasis.Router do
         schema = Map.get(media, "schema")
 
         if schema != nil do
-          media = Map.put(media, "schema", schema)
+          media = Map.put(media, "schema", Mix.Oasis.compile_json_schema!(schema))
           Map.put(acc, content_type, media)
         else
           acc
@@ -194,7 +194,7 @@ defmodule Mix.Oasis.Router do
 
   defp map_parameter(%{"name" => name, "schema" => schema} = parameter, acc) do
     parameter =
-      put_required_if_exists(parameter, %{"schema" => schema})
+      put_required_if_exists(parameter, %{"schema" => Mix.Oasis.compile_json_schema!(schema)})
 
     Map.merge(acc, %{name => parameter})
   end

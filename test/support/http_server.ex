@@ -20,6 +20,7 @@ defmodule Oasis.HTTPServer.PlugRouter do
   @moduledoc false
 
   use Oasis.Router
+  use JSONSchex
 
   plug(:match)
 
@@ -33,7 +34,7 @@ defmodule Oasis.HTTPServer.PlugRouter do
     private: %{
       path_schema: %{
         "id" => %{
-          "schema" => %{"type" => "integer"}
+          "schema" => ~X|%{"type" => "integer"}|
         }
       }
     } do
@@ -48,7 +49,7 @@ defmodule Oasis.HTTPServer.PlugRouter do
     private: %{
       path_schema: %{
         "id" => %{
-          "schema" => %{"type" => "integer"}
+          "schema" => ~X|%{"type" => "integer"}|
         }
       }
     },

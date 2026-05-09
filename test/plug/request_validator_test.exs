@@ -1,18 +1,20 @@
 defmodule Oasis.Plug.RequestValidatorTest do
   use ExUnit.Case, async: false
+  use JSONSchex
+
   import Plug.Test
   import Plug.Conn
 
   alias Oasis.Plug.RequestValidator
 
-  @schema1 %{
+  @schema1 ~X|%{
     "properties" => %{
       "name" => %{"type" => "string"},
       "tag" => %{"type" => "integer"}
     },
     "required" => ["name", "tag"],
     "type" => "object"
-  }
+  }|
 
   describe "with charset in send request" do
     test "content type application/json" do

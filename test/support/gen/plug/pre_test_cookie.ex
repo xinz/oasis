@@ -1,13 +1,14 @@
 defmodule Oasis.Gen.Plug.PreTestCookie do
   use Oasis.Controller
   use Plug.ErrorHandler
+  use JSONSchex
 
   plug(
     Oasis.Plug.RequestValidator,
     cookie_schema: %{
       "items" => %{
         "required" => true,
-        "schema" => %{"items" => %{"type" => "number"}, "type" => "array"}
+        "schema" => ~X|%{"items" => %{"type" => "number"}, "type" => "array"}|
       }
     }
   )

@@ -1,6 +1,7 @@
 defmodule Oasis.RouterTest do
   defmodule Sample do
     use Oasis.Router
+    use JSONSchex
 
     plug(:match)
 
@@ -15,7 +16,7 @@ defmodule Oasis.RouterTest do
       private: %{
         path_schema: %{
           "id" => %{
-            "schema" => %{"type" => "integer"}
+            "schema" => ~X|%{"type" => "integer"}|
           }
         }
       } do
@@ -42,7 +43,7 @@ defmodule Oasis.RouterTest do
       private: %{
         path_schema: %{
           "id" => %{
-            "schema" => %{"type" => "integer"}
+            "schema" => ~X|%{"type" => "integer"}|
           }
         }
       } do
@@ -53,7 +54,7 @@ defmodule Oasis.RouterTest do
       private: %{
         path_schema: %{
           "page_id" => %{
-            "schema" => %{"type" => "integer"}
+            "schema" => ~X|%{"type" => "integer"}|
           }
         }
       } do
@@ -64,10 +65,10 @@ defmodule Oasis.RouterTest do
       private: %{
         path_schema: %{
           "user_id" => %{
-            "schema" => %{"type" => "integer"}
+            "schema" => ~X|%{"type" => "integer"}|
           },
           "group_id" => %{
-            "schema" => %{"type" => "string"}
+            "schema" => ~X|%{"type" => "string"}|
           }
         }
       } do

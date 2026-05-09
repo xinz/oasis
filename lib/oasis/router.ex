@@ -7,11 +7,13 @@ defmodule Oasis.Router do
   huge difference, except that specify parameters which will then be available and types coverted
   in the function body:
 
+      use JSONSchex
+
       get("/hello/:id",
         private: %{
           path_schema: %{
             "id" => %{
-              "schema" => %{"type" => "integer"}
+              "schema" => ~X|%{"type" => "integer"}|
             }
           }
         }) do

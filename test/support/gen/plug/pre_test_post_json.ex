@@ -1,6 +1,7 @@
 defmodule Oasis.Gen.Plug.PreTestPostJSON do
   use Oasis.Controller
   use Plug.ErrorHandler
+  use JSONSchex
 
   plug(
     Plug.Parsers,
@@ -15,7 +16,8 @@ defmodule Oasis.Gen.Plug.PreTestPostJSON do
       "required" => true,
       "content" => %{
         "application/json" => %{
-          "schema" => %{
+          "schema" => ~X"""
+          %{
             "items" => %{
               "type" => "object",
               "properties" => %{
@@ -26,19 +28,17 @@ defmodule Oasis.Gen.Plug.PreTestPostJSON do
             },
             "type" => "array"
           }
+          """
         },
         "application/vnd.api-v1+json" => %{
-          "schema" => %{
-            "type" => "integer"
-          }
+          "schema" => ~X|%{"type" => "integer"}|
         },
         "application/vnd.api-v2+json" => %{
-          "schema" => %{
-            "type" => "number"
-          }
+          "schema" => ~X|%{"type" => "number"}|
         },
         "application/vnd.api-v3+json" => %{
-          "schema" => %{
+          "schema" => ~X"""
+          %{
             "properties" => %{
               "_json" => %{
                 "type" => "object",
@@ -51,6 +51,7 @@ defmodule Oasis.Gen.Plug.PreTestPostJSON do
             },
             "type" => "object"
           }
+          """
         }
       }
     }

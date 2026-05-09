@@ -2,6 +2,7 @@ defmodule Oasis.Spec.SpecTest do
   use ExUnit.Case
 
   @dir Path.expand("./file", __DIR__)
+  @jsonschex_compile_options [format_assertion: true, content_assertion: false]
 
   test "parse basic info from yaml and json" do
     file_path = Path.join([@dir, "basic.yaml"])
@@ -56,10 +57,10 @@ defmodule Oasis.Spec.SpecTest do
     assert request_body_of_refresh_token["required"] == true
 
     schema = request_body_of_refresh_token["content"]["application/json"]["schema"]
-    schema = Oasis.JSONSchema.compile!(schema)
+    {:ok, schema} = JSONSchex.compile(schema, @jsonschex_compile_options)
 
-    assert Oasis.JSONSchema.validate(schema, %{"refresh_token" => "123"}) == :ok
-
-    assert {:error, _} = Oasis.JSONSchema.validate(schema, %{})
+    assert %JSONSchex.Types.Schema{} = schema
+    assert :ok = JSONSchex.validate(schema, %{"refresh_token" => "123"})
+    assert {:error, _} = JSONSchex.validate(schema, %{})
   end
 end

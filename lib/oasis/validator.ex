@@ -1,7 +1,7 @@
 defmodule Oasis.Validator do
   @moduledoc false
 
-  alias Oasis.{BadRequestError, JSONSchema}
+  alias Oasis.BadRequestError
 
   @spec parse_and_validate!(
           param :: map() | nil,
@@ -80,9 +80,12 @@ defmodule Oasis.Validator do
     do_parse_and_validate_value!(json_schema_root, use_in, param_name, value)
   end
 
-  defp do_parse_and_validate_value!(json_schema_root, use_in, param_name, value) do
-    schema = JSONSchema.raw_schema(json_schema_root)
-
+  defp do_parse_and_validate_value!(
+         %JSONSchex.Types.Schema{raw: schema} = json_schema_root,
+         use_in,
+         param_name,
+         value
+       ) do
     try do
       Oasis.Parser.parse(schema, value)
     rescue
@@ -107,18 +110,17 @@ defmodule Oasis.Validator do
             raise BadRequestError,
               error: %BadRequestError.JsonSchemaValidationFailed{
                 error: error,
-                path: JSONSchema.path_pointer(error)
+                path: path_pointer(error)
               },
               use_in: use_in,
               param_name: param_name,
-              message:
-                "Failed to validate JSON schema with an error: #{JSONSchema.format_error(error)}"
+              message: "Failed to validate JSON schema with an error: #{format_error(error)}"
         end
     end
   end
 
-  defp unwrap_json_body?(json_schema_root, value) do
-    case JSONSchema.raw_schema(json_schema_root) do
+  defp unwrap_json_body?(%JSONSchex.Types.Schema{raw: raw_schema}, value) do
+    case raw_schema do
       %{"type" => "string"} -> is_bitstring(value)
       %{"type" => "number"} -> is_number(value)
       %{"type" => "integer"} -> is_integer(value)
@@ -128,8 +130,8 @@ defmodule Oasis.Validator do
     end
   end
 
-  defp json_schema_validate(json_schema_root, parsed) do
-    {JSONSchema.validate(json_schema_root, parsed), parsed}
+  defp json_schema_validate(%JSONSchex.Types.Schema{} = json_schema_root, parsed) do
+    {JSONSchex.validate(json_schema_root, parsed), parsed}
   end
 
   defp recheck_after_validate({:ok, parsed}), do: {:ok, parsed}
@@ -187,6 +189,28 @@ defmodule Oasis.Validator do
   end
 
   defp value_in_path(_path, _parsed), do: nil
+
+  defp format_error(%JSONSchex.Types.Error{} = error), do: JSONSchex.format_error(error)
+
+  defp path_pointer(%JSONSchex.Types.Error{path: path}) do
+    case List.wrap(path) do
+      [] ->
+        "#"
+
+      segments ->
+        encoded = Enum.map_join(segments, "/", &encode_segment/1)
+        "#/#{encoded}"
+    end
+  end
+
+  defp encode_segment(segment) when is_integer(segment), do: Integer.to_string(segment)
+
+  defp encode_segment(segment) do
+    segment
+    |> to_string()
+    |> String.replace("~", "~0")
+    |> String.replace("/", "~1")
+  end
 
   defp process_media_type(
          "text/plain" <> _charset,

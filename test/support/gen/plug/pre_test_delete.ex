@@ -1,6 +1,7 @@
 defmodule Oasis.Gen.Plug.PreTestDelete do
   use Oasis.Controller
   use Plug.ErrorHandler
+  use JSONSchex
 
   plug(
     Plug.Parsers,
@@ -12,14 +13,11 @@ defmodule Oasis.Gen.Plug.PreTestDelete do
     Oasis.Plug.RequestValidator,
     query_schema: %{
       "relation_ids" => %{
-        "schema" => %{
-          "type" => "array",
-          "items" => %{"type" => "string"}
-        },
+        "schema" => ~X|%{"type" => "array", "items" => %{"type" => "string"}}|,
         "required" => false
       },
       "id" => %{
-        "schema" => %{"type" => "integer"},
+        "schema" => ~X|%{"type" => "integer"}|,
         "required" => true
       }
     }

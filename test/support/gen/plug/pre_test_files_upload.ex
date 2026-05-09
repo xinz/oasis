@@ -1,6 +1,7 @@
 defmodule Oasis.Gen.Plug.PreTestFilesUpload do
   use Oasis.Controller
   use Plug.ErrorHandler
+  use JSONSchex
 
   plug(
     Plug.Parsers,
@@ -13,13 +14,15 @@ defmodule Oasis.Gen.Plug.PreTestFilesUpload do
     body_schema: %{
       "content" => %{
         "multipart/form-data" => %{
-          "schema" => %{
+          "schema" => ~X"""
+          %{
             "properties" => %{
               "file" => %{"items" => %{}, "type" => "array"},
               "logo" => %{"type" => "string"},
               "id" => %{"type" => "integer"}
             }
           }
+          """
         }
       }
     }

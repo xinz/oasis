@@ -1,6 +1,8 @@
 defmodule Mix.Oasis do
   @moduledoc false
 
+  @jsonschex_compile_options [format_assertion: true, content_assertion: false]
+
   def new(%{"paths" => paths} = spec, opts) when is_map(paths) do
     Mix.Oasis.Router.generate_files_by_paths_spec(generator_paths(), spec, opts)
   end
@@ -128,6 +130,81 @@ defmodule Mix.Oasis do
 
     EEx.eval_string(content, binding)
   end
+
+  def render_embedded_schemas(term) do
+    term
+    |> schema_container_to_ast()
+    |> Macro.to_string()
+  end
+
+  def compile_json_schema!(%JSONSchex.Types.Schema{} = schema), do: schema
+
+  def compile_json_schema!(schema) when is_map(schema) or is_boolean(schema) do
+    case JSONSchex.compile(schema, @jsonschex_compile_options) do
+      {:ok, compiled} ->
+        compiled
+
+      {:error, error} ->
+        raise ArgumentError, JSONSchex.format_error(error)
+    end
+  end
+
+  defp schema_container_to_ast(%JSONSchex.Types.Schema{} = schema) do
+    compiled_schema_ast(schema)
+  end
+
+  defp schema_container_to_ast(%{} = map) do
+    {:%{}, [], map |> Enum.sort_by(&entry_sort_key/1) |> Enum.map(&schema_map_entry_to_ast/1)}
+  end
+
+  defp schema_container_to_ast(list) when is_list(list) do
+    Enum.map(list, &schema_container_to_ast/1)
+  end
+
+  defp schema_container_to_ast(tuple) when is_tuple(tuple) do
+    tuple
+    |> Tuple.to_list()
+    |> Enum.map(&schema_container_to_ast/1)
+    |> List.to_tuple()
+  end
+
+  defp schema_container_to_ast(value) do
+    Macro.escape(value)
+  end
+
+  defp schema_map_entry_to_ast({"schema", %JSONSchex.Types.Schema{} = schema}) do
+    {Macro.escape("schema"), compiled_schema_ast(schema)}
+  end
+
+  defp schema_map_entry_to_ast({"schema", schema}) when is_map(schema) or is_boolean(schema) do
+    {Macro.escape("schema"), compile_schema_ast(schema, @jsonschex_compile_options)}
+  end
+
+  defp schema_map_entry_to_ast({key, value}) do
+    {Macro.escape(key), schema_container_to_ast(value)}
+  end
+
+  defp compiled_schema_ast(%JSONSchex.Types.Schema{} = schema) do
+    compile_schema_ast(schema.raw, compile_options_from_compiled(schema))
+  end
+
+  defp compile_schema_ast(schema, opts) do
+    quote do
+      JSONSchex.Schema.compile!(
+        unquote(Macro.escape(schema)),
+        unquote(opts)
+      )
+    end
+  end
+
+  defp compile_options_from_compiled(%JSONSchex.Types.Schema{} = schema) do
+    [
+      format_assertion: schema.format_assertion,
+      content_assertion: schema.content_assertion
+    ]
+  end
+
+  defp entry_sort_key({key, _value}), do: :erlang.term_to_binary(key)
 
   defp to_app_source(path, source_dir) when is_binary(path),
     do: Path.join(path, source_dir)

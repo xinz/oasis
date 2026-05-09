@@ -1,6 +1,7 @@
 defmodule Oasis.Gen.Plug.PreTestPostUrlencoded do
   use Oasis.Controller
   use Plug.ErrorHandler
+  use JSONSchex
 
   plug(
     Plug.Parsers,
@@ -16,7 +17,8 @@ defmodule Oasis.Gen.Plug.PreTestPostUrlencoded do
       "required" => true,
       "content" => %{
         "application/x-www-form-urlencoded" => %{
-          "schema" => %{
+          "schema" => ~X"""
+          %{
             "properties" => %{
               "name" => %{"type" => "string"},
               "fav_number" => %{"type" => "integer", "minimum" => 1, "maximum" => 3}
@@ -24,6 +26,7 @@ defmodule Oasis.Gen.Plug.PreTestPostUrlencoded do
             "required" => ["name", "fav_number"],
             "type" => "object"
           }
+          """
         }
       }
     }

@@ -1,6 +1,7 @@
 defmodule Oasis.Gen.Plug.PreTestSignBearerAuth do
   use Oasis.Controller
   use Plug.ErrorHandler
+  use JSONSchex
 
   plug(
     Plug.Parsers,
@@ -14,7 +15,8 @@ defmodule Oasis.Gen.Plug.PreTestSignBearerAuth do
       "required" => true,
       "content" => %{
         "application/x-www-form-urlencoded" => %{
-          "schema" => %{
+          "schema" => ~X"""
+          %{
             "properties" => %{
               "username" => %{"type" => "string"},
               "password" => %{"type" => "string"},
@@ -23,6 +25,7 @@ defmodule Oasis.Gen.Plug.PreTestSignBearerAuth do
             "required" => ["username", "password"],
             "type" => "object"
           }
+          """
         }
       }
     }

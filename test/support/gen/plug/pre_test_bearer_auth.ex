@@ -1,12 +1,13 @@
 defmodule Oasis.Gen.Plug.PreTestBearerAuth do
   use Oasis.Controller
   use Plug.ErrorHandler
+  use JSONSchex
 
   plug(
     Oasis.Plug.RequestValidator,
     query_schema: %{
       "max_age" => %{
-        "schema" => %{"type" => "integer"},
+        "schema" => ~X|%{"type" => "integer"}|,
         "required" => false
       }
     }

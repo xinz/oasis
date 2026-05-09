@@ -3,7 +3,8 @@ defmodule <%= inspect context.module_name %> do
   # run `mix oas.gen.plug` task command with the OpenAPI Specification file.
   use Oasis.Controller
   use Plug.ErrorHandler
-  
+  require JSONSchex.Schema
+
   <%= context.plug_parsers %>
 
   <%= context.request_validator %>
@@ -15,5 +16,4 @@ defmodule <%= inspect context.module_name %> do
   end
 
   defdelegate handle_errors(conn, error), to: <%= inspect context.plug_module %>
-
 end

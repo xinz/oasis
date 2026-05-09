@@ -10,7 +10,9 @@ defmodule Oasis.Plug.RequestValidator do
     * `:cookie_schema`
     * `:body_schema`
 
-  All of these options are fully map and generated from the corresponding definition of the OpenAPI Specification.
+  All of these options are generated from the corresponding definition of the OpenAPI Specification.
+  The option containers are maps, and nested `"schema"` values should be compiled
+  `JSONSchex.Types.Schema` structs.
 
   When the query parameters are verified by the validation of `:query_schema`, the coverted types of query parameters
   are reserved in `:query_params` and `:params` field of the `Plug.Conn`.

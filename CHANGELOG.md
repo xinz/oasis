@@ -2,13 +2,15 @@
 
 ## Unreleased
 
-* Add root-level `JSONSCHEX_REFACTOR_PLAN.md` as the working migration spec for replacing `ex_json_schema` with `jsonschex`
-* Add initial schema boundary modules: `Oasis.JSONSchema` and `Oasis.Spec.RefResolver`
+* Add root-level `JSONSCHEX_REFACTOR_PLAN.md` as the working migration and follow-up document for replacing `ex_json_schema` with `jsonschex`
 * Refactor `Oasis.Spec.read/1` to return `Oasis.Spec.Document` and remove `ExJsonSchema.Schema.Root` from the spec loading pipeline
-* Add `jsonschex` and switch `Oasis.JSONSchema` runtime compilation/validation directly to JSON Schema Draft 2020-12
-* Remove `ex_json_schema` from project dependencies and first-party runtime code
-* Refactor generator and test support code to store raw schema maps instead of `ExJsonSchema.Schema.Root`
-* Update validator and integration tests to assert `jsonschex` error messages directly
+* Add `Oasis.Spec.RefResolver` so OpenAPI document traversal stays Oasis-owned
+* Switch the project to `jsonschex` Draft 2020-12 validation and remove `ex_json_schema` from dependencies and first-party runtime code
+* Track `jsonschex` from the latest `main` branch and adopt `JSONSchex.Schema.compile!/2` for generated compile-time schemas
+* Use `~X` for concise handwritten static schemas in first-party code and tests where it improves readability
+* Refactor generator, build-time metadata, and test support so nested `"schema"` values are compiled `JSONSchex.Types.Schema` structs
+* Simplify runtime validation by using `JSONSchex.Types.Schema` directly in `Oasis.Validator`
+* Update validator, generator, and integration tests to assert compiled-schema behavior and `jsonschex` validation semantics directly
 
 ## v0.6.0 (2026-01-29)
 

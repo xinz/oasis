@@ -1,6 +1,7 @@
 defmodule Oasis.Gen.Plug.PreTestHeader do
   use Oasis.Controller
   use Plug.ErrorHandler
+  use JSONSchex
 
   # Notice:
   # all header name are downcased when generate `pre-*` handler module
@@ -10,7 +11,7 @@ defmodule Oasis.Gen.Plug.PreTestHeader do
     header_schema: %{
       "items" => %{
         "required" => true,
-        "schema" => %{"items" => %{"type" => "integer"}, "type" => "array"}
+        "schema" => ~X|%{"items" => %{"type" => "integer"}, "type" => "array"}|
       }
     }
   )

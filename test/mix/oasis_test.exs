@@ -1,6 +1,11 @@
 defmodule Mix.OasisTest do
   use ExUnit.Case, async: true
 
+  defp assert_compiled_schema(schema) do
+    assert %JSONSchex.Types.Schema{} = schema
+    schema
+  end
+
   test "name space" do
     assert Mix.Oasis.name_space(nil) == {"Oasis.Gen", "lib/oasis/gen"}
 
@@ -339,7 +344,7 @@ defmodule Mix.OasisTest do
     body_schema = binding.body_schema
 
     assert Map.get(body_schema, "required") == true
-    assert is_map(get_in(body_schema, ["content", "text/plain"]))
+    assert %JSONSchex.Types.Schema{} = get_in(body_schema, ["content", "text/plain", "schema"])
   end
 
   test "Mix.Oasis.new/2 with multipart request body" do
@@ -401,8 +406,12 @@ defmodule Mix.OasisTest do
 
     body_schema = binding.body_schema
     assert Map.get(body_schema, "required") == nil
-    assert is_map(get_in(body_schema, ["content", "multipart/form-data"]))
-    assert is_map(get_in(body_schema, ["content", "multipart/mixed"]))
+
+    assert %JSONSchex.Types.Schema{} =
+             get_in(body_schema, ["content", "multipart/form-data", "schema"])
+
+    assert %JSONSchex.Types.Schema{} =
+             get_in(body_schema, ["content", "multipart/mixed", "schema"])
 
     assert binding.plug_parsers =~ ~s/parsers: [:multipart]/
   end
@@ -486,22 +495,22 @@ defmodule Mix.OasisTest do
 
         assert router.query_schema == nil and body_schema != nil
 
-        schema = body_schema["content"]["application/json"]["schema"]
-        assert is_map(schema)
+        schema =
+          body_schema["content"]["application/json"]["schema"]
+          |> assert_compiled_schema()
 
-        assert Oasis.JSONSchema.valid?(schema, %{"name" => "test-name"})
-        assert Oasis.JSONSchema.valid?(schema, %{"tag" => "test-tag"}) == false
+        assert :ok = JSONSchex.validate(schema, %{"name" => "test-name"})
+        assert {:error, _} = JSONSchex.validate(schema, %{"tag" => "test-tag"})
 
-        schema = body_schema["content"]["application/x-www-form-urlencoded"]["schema"]
-        assert is_map(schema)
+        schema =
+          body_schema["content"]["application/x-www-form-urlencoded"]["schema"]
+          |> assert_compiled_schema()
 
-        assert Oasis.JSONSchema.valid?(schema, %{"name" => "test-name", "fav_number" => 1}) ==
-                 true
+        assert :ok = JSONSchex.validate(schema, %{"name" => "test-name", "fav_number" => 1})
+        assert {:error, _} = JSONSchex.validate(schema, %{"fav_number" => 1})
 
-        assert Oasis.JSONSchema.valid?(schema, %{"fav_number" => 1}) == false
-
-        assert Oasis.JSONSchema.valid?(schema, %{"name" => "test-name", "fav_number" => 10}) ==
-                 false
+        assert {:error, _} =
+                 JSONSchex.validate(schema, %{"name" => "test-name", "fav_number" => 10})
 
       {_, file_path2, "plug.ex", Oasis.Gen.AddPet, router} ->
         assert file_path2 == "lib/oasis/gen/add_pet.ex" and router.http_verb == "post" and
@@ -514,9 +523,10 @@ defmodule Mix.OasisTest do
         assert router.query_schema != nil and router.body_schema == nil
 
         %{"id" => %{"schema" => schema}} = router.query_schema
+        schema = assert_compiled_schema(schema)
 
-        assert Oasis.JSONSchema.valid?(schema, 1) == false
-        assert Oasis.JSONSchema.valid?(schema, ["a", "b", "c"]) == true
+        assert {:error, _} = JSONSchex.validate(schema, 1)
+        assert :ok = JSONSchex.validate(schema, ["a", "b", "c"])
 
       {_, file_path4, "plug.ex", Oasis.Gen.GetMyPost, router} ->
         assert file_path4 == "lib/oasis/gen/get_my_post.ex" and router.http_verb == "get" and
@@ -619,8 +629,10 @@ defmodule Mix.OasisTest do
         assert router.header_schema == nil and router.cookie_schema != nil
 
         %{"session_id" => %{"schema" => schema}} = router.cookie_schema
-        assert Oasis.JSONSchema.valid?(schema, 1) == true
-        assert Oasis.JSONSchema.valid?(schema, "abc") == false
+        schema = assert_compiled_schema(schema)
+
+        assert :ok = JSONSchex.validate(schema, 1)
+        assert {:error, _} = JSONSchex.validate(schema, "abc")
 
       {_, file_path, "plug.ex", Oasis.Gen.PutQueryPet, router} ->
         assert file_path == "lib/oasis/gen/put_query_pet.ex" and router.http_verb == "put"
@@ -633,11 +645,14 @@ defmodule Mix.OasisTest do
         %{"token" => %{"schema" => token_schema}, "appid" => %{"schema" => appid_schema}} =
           router.header_schema
 
-        assert Oasis.JSONSchema.valid?(token_schema, "1") == true
-        assert Oasis.JSONSchema.valid?(token_schema, 1) == false
+        token_schema = assert_compiled_schema(token_schema)
+        appid_schema = assert_compiled_schema(appid_schema)
 
-        assert Oasis.JSONSchema.valid?(appid_schema, "abc") == true
-        assert Oasis.JSONSchema.valid?(appid_schema, 100) == false
+        assert :ok = JSONSchex.validate(token_schema, "1")
+        assert {:error, _} = JSONSchex.validate(token_schema, 1)
+
+        assert :ok = JSONSchex.validate(appid_schema, "abc")
+        assert {:error, _} = JSONSchex.validate(appid_schema, 100)
 
         assert file_path == "lib/oasis/gen/pre_get_query_pet.ex" and router.http_verb == "get"
         assert router.header_schema != nil and router.cookie_schema == nil
@@ -651,12 +666,16 @@ defmodule Mix.OasisTest do
         assert router.path_schema != nil and router.query_schema != nil
 
         %{"id" => %{"schema" => schema}} = router.path_schema
-        assert Oasis.JSONSchema.valid?(schema, 1) == true
-        assert Oasis.JSONSchema.valid?(schema, "1") == false
+        schema = assert_compiled_schema(schema)
+
+        assert :ok = JSONSchex.validate(schema, 1)
+        assert {:error, _} = JSONSchex.validate(schema, "1")
 
         %{"tags" => %{"schema" => schema}} = router.query_schema
-        assert Oasis.JSONSchema.valid?(schema, ["1", "2", "3"]) == true
-        assert Oasis.JSONSchema.valid?(schema, "abc") == false
+        schema = assert_compiled_schema(schema)
+
+        assert :ok = JSONSchex.validate(schema, ["1", "2", "3"])
+        assert {:error, _} = JSONSchex.validate(schema, "abc")
 
       {_, file_path, "plug.ex", Oasis.Gen.DeletePet, router} ->
         assert file_path == "lib/oasis/gen/delete_pet.ex" and router.http_verb == "delete"

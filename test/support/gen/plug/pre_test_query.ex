@@ -1,6 +1,7 @@
 defmodule Oasis.Gen.Plug.PreTestQuery do
   use Oasis.Controller
   use Plug.ErrorHandler
+  use JSONSchex
 
   plug(
     Oasis.Plug.RequestValidator,
@@ -8,7 +9,8 @@ defmodule Oasis.Gen.Plug.PreTestQuery do
       "profile" => %{
         "content" => %{
           "application/json" => %{
-            "schema" => %{
+            "schema" => ~X"""
+            %{
               "properties" => %{
                 "name" => %{"type" => "string"},
                 "tag" => %{"type" => "integer"}
@@ -16,16 +18,17 @@ defmodule Oasis.Gen.Plug.PreTestQuery do
               "required" => ["name", "tag"],
               "type" => "object"
             }
+            """
           }
         },
         "required" => false
       },
       "lang" => %{
-        "schema" => %{"type" => "integer", "minimum" => 10, "maximum" => 20},
+        "schema" => ~X|%{"type" => "integer", "minimum" => 10, "maximum" => 20}|,
         "required" => true
       },
       "all" => %{
-        "schema" => %{"type" => "boolean"},
+        "schema" => ~X|%{"type" => "boolean"}|,
         "required" => false
       }
     }

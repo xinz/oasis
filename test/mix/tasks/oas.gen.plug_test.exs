@@ -74,6 +74,7 @@ defmodule Mix.Tasks.Oas.Gen.PlugTest do
       assert_file("lib/oasis/gen/router.ex", fn file ->
         assert file =~ ~s|defmodule Oasis.Gen.Router do|
         assert file =~ ~s|use Oasis.Router|
+        assert file =~ ~s|require JSONSchex.Schema|
         assert file =~ ~s|plug(:match)|
         assert file =~ ~s|plug(:dispatch)|
         assert file =~ ~s|get(\n    "/pets",\n    to: Oasis.Gen.PreFindPets|
@@ -81,6 +82,7 @@ defmodule Mix.Tasks.Oas.Gen.PlugTest do
         assert file =~ ~s|delete(\n    "/pets/:id",\n    private: %{\n      path_schema: %{|
         assert file =~ ~s|to: Oasis.Gen.PreDeletePet|
         assert file =~ ~s|get(\n    "/pets/:id",\n    private: %{\n      path_schema: %{\n|
+        assert file =~ ~s|JSONSchex.Schema.compile!(%{|
         assert file =~ ~s|to: Oasis.Gen.PreFindPetById|
         assert file =~ ~s|match _ do|
       end)
@@ -88,8 +90,11 @@ defmodule Mix.Tasks.Oas.Gen.PlugTest do
       assert_file("lib/oasis/gen/pre_add_pet.ex", fn file ->
         assert file =~ ~s|defmodule Oasis.Gen.PreAddPet do|
         assert file =~ ~s|use Oasis.Controller|
+        assert file =~ ~s|require JSONSchex.Schema|
         assert file =~ ~s|plug(\n    Plug.Parsers,|
-        assert file =~ ~s|"application/json" => %{\n          "schema" => %{|
+        assert file =~ ~s|"application/json" => %{
+          "schema" =>
+            JSONSchex.Schema.compile!(|
         assert file =~ ~s/conn |> super(opts) |> Oasis.Gen.AddPet.call(opts) |> halt()/
       end)
 

@@ -1,6 +1,7 @@
 defmodule Oasis.Gen.Plug.PreTestPostMultipart do
   use Oasis.Controller
   use Plug.ErrorHandler
+  use JSONSchex
 
   plug(
     Plug.Parsers,
@@ -14,7 +15,8 @@ defmodule Oasis.Gen.Plug.PreTestPostMultipart do
       "required" => true,
       "content" => %{
         "multipart/mixed" => %{
-          "schema" => %{
+          "schema" => ~X"""
+          %{
             "properties" => %{
               "id" => %{"type" => "string"},
               "addresses" => %{
@@ -32,9 +34,11 @@ defmodule Oasis.Gen.Plug.PreTestPostMultipart do
             "required" => ["id", "addresses"],
             "type" => "object"
           }
+          """
         },
         "multipart/form-data" => %{
-          "schema" => %{
+          "schema" => ~X"""
+          %{
             "properties" => %{
               "id" => %{"type" => "integer", "maximum" => 10},
               "username" => %{"type" => "string"}
@@ -42,6 +46,7 @@ defmodule Oasis.Gen.Plug.PreTestPostMultipart do
             "required" => ["id", "username"],
             "type" => "object"
           }
+          """
         }
       }
     }

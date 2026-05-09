@@ -3,6 +3,7 @@ defmodule Oasis.Gen.Plug.PrePostTestHMACWithBody do
   # run `mix oas.gen.plug` task command with the OpenAPI Specification file.
   use Oasis.Controller
   use Plug.ErrorHandler
+  use JSONSchex
 
   plug(
     Plug.Parsers,
@@ -17,7 +18,7 @@ defmodule Oasis.Gen.Plug.PrePostTestHMACWithBody do
     body_schema: %{
       "content" => %{
         "application/json" => %{
-          "schema" => %{"properties" => %{"a" => %{"type" => "string"}}, "type" => "object"}
+          "schema" => ~X|%{"properties" => %{"a" => %{"type" => "string"}}, "type" => "object"}|
         }
       }
     }
