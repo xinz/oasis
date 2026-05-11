@@ -9,15 +9,13 @@ Background
 
 > The [OpenAPI Specification](https://www.openapis.org/) (OAS) defines a standard, programming language-agnostic interface description for REST APIs, which allows both humans and computers to discover and understand the capabilities of a service without requiring access to source code, additional documentation, or inspection of network traffic. When properly defined via OpenAPI, a consumer can understand and interact with the remote service with a minimal amount of implementation logic. Similar to what interface descriptions have done for lower-level programming, the OpenAPI Specification removes guesswork in calling a service.
 
-Oasis is:
+Oasis is built on `Plug` and uses an OpenAPI specification to generate a server router and the corresponding HTTP request handlers. Because OAS relies on [JSON Schema](https://json-schema.org/) for data definitions, Oasis focuses on request parameter type conversion and validation.
 
-Base on `Plug`'s implements, according to the OpenAPI Specification to generate server's router and the all well defined HTTP request handlers, since the OAS defines a detailed collection of data types by [JSON Schema Specification](https://json-schema.org/), Oasis leverages this and focuses on the types conversion and validation to the parameters of the HTTP request.
-
-* Maintain an OpenAPI Specification document(in YAML or JSON) is the first priority
-* Generate the maintainable router and HTTP request handlers code by the defined document
-* In general, we do not need to manually write the OpenAPI definitions in Elixir
-* Simplify the REST APIs to convert types and validate the parameters of the HTTP request
-* More reference and communication to your REST APIs
+- Keep the OpenAPI specification document (YAML or JSON) as the primary source of truth
+- Generate maintainable router and HTTP request handler code from that document
+- Avoid manually rewriting OpenAPI definitions in Elixir in common workflows
+- Simplify REST API development by converting and validating request parameters
+- Improve API communication and documentation through a shared specification
 
 ## Installation
 
@@ -31,9 +29,9 @@ def deps do
 end
 ```
 
-## Implements to OAS
+## Implemented OAS Features
 
-Oasis does not cover the full OpenAPI specification, so far the implements contain:
+Oasis does not cover the full OpenAPI specification. The current implementation includes:
 
 * [Components Object](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md#componentsObject)
 * [Paths Object](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md#pathsObject)
@@ -55,11 +53,11 @@ For current JSON Schema validation behavior and Draft `2020-12` notes, please al
 
 ## How to use
 
-### Prepare YAML or JSON specification
+### Prepare a YAML or JSON specification
 
-First, write your API document refer the OpenAPI Specification(see [reference](#reference) for details), we build Oasis with the version [3.1.0](http://spec.openapis.org/oas/v3.1.0) of the OAS, as usual, the common use case should be covered for the version `3.0.*` of the OAS.
+First, write your API document according to the OpenAPI Specification (see [Reference](#reference) below). Oasis is built around OAS [3.1.0](http://spec.openapis.org/oas/v3.1.0), and many common `3.0.*` use cases are also covered.
 
-Here is a minimum specification for an example in YAML, we save it as "petstore-mini.yaml" in this tutorial.
+Here is a minimal YAML example saved as `petstore-mini.yaml`.
 
 ```yaml
 openapi: "3.1.0"
@@ -78,11 +76,11 @@ paths:
               type: string
         - name: limit
           in: query
-          requried: false
+          required: false
           schema:
             type: integer
             format: int32
-      response:
+      responses:
         '200':
           content:
             application/json:
@@ -98,7 +96,7 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/NewPet'
-      response:
+      responses:
         '200':
           content:
             application/json:
@@ -115,7 +113,7 @@ paths:
           schema:
             type: integer
             format: int64
-      response:
+      responses:
         '200':
           content:
             application/json:
@@ -145,15 +143,15 @@ components:
           type: string
 ```
 
-### Run mix task
+### Run the mix task
 
-And then we run the following mix task to generate the corresponding files:
+Run the following mix task to generate the corresponding files:
 
 ```
 mix oas.gen.plug --file path/to/petstore-mini.yaml
 ```
 
-We will see these output:
+You will see output like this:
 
 ```
 Generates Router and Plug modules from OAS
@@ -168,30 +166,30 @@ Generates Router and Plug modules from OAS
 
 The generated `pre_*` modules compile nested JSON Schemas at module compile time with `JSONSchex.Schema.compile!/2`, so request validation works with compiled `JSONSchex.Types.Schema` values at runtime. In concise handwritten examples and tests, Oasis may also use `~X` when it is the clearest static schema form.
 
-The arguments of `oas.gen.plug` mix task:
+The `oas.gen.plug` mix task accepts these arguments:
 
-* `--file`, required, the completed path to the specification file in YAML or JSON format.
-* `--router`, optional, the generated router's module alias, by default it is `Router` (the full module name is `Oasis.Gen.Router` by default), for example we set `--router Hello.MyRouter` meanwhile there is no other special name space defined, the final router module is `Oasis.Gen.Hello.MyRouter` in `/lib/oasis/gen/hello/my_router.ex` path.
-* `--name-space`, optional, the generated all modules' name space, by default it is `Oasis.Gen`, this argument will always override the name space from the input `--file` if any `"x-oasis-name-space"` field(s) defined.
+* `--file` — required. The full path to the specification file in YAML or JSON format.
+* `--router` — optional. The generated router module alias. The default is `Router`, which produces `Oasis.Gen.Router` by default. For example, if you pass `--router Hello.MyRouter` and do not define another namespace, the final router module becomes `Oasis.Gen.Hello.MyRouter` in `lib/oasis/gen/hello/my_router.ex`.
+* `--name-space` — optional. The namespace for all generated modules. The default is `Oasis.Gen`. This argument always overrides any `"x-oasis-name-space"` fields defined in the specification file.
 
 ### Special instructions
 
-#### Name Plug's handler
+#### Name the Plug handlers
 
-Refer the OAS, the `operationId` field of [Operation Object](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md#operationObject) is not required, but it should be unique among all operations described in the API if `operationId` field exists.
+In OAS, the `operationId` field of the [Operation Object](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md#operationObject) is optional, but if it exists it should be unique across all operations in the API.
 
-   * When use this field, Oasis will use it to construct the generated module alias and the file name of ".ex" file, e.g. see the above `find_pet_by_id.ex` file with `Oasis.Gen.FindPetById` module name.
-   * When not use this filed, Oasis will combine the HTTP verb with the URL to generate the module alias and the file name of ".ex" file, e.g. see the above `get_pets.ex` file with `Oasis.Gen.GetPets` module name.
+- When you use this field, Oasis uses it to construct the generated module alias and `.ex` file name. For example, the earlier `find_pet_by_id.ex` file produces the `Oasis.Gen.FindPetById` module.
+- When you do not use this field, Oasis combines the HTTP verb with the URL to generate the module alias and file name. For example, `get_pets.ex` produces the `Oasis.Gen.GetPets` module.
 
-#### Generated code to folder
+#### Generated code location
 
-The generated codes are always put in the `lib` directory of your application root path, because they need to be integrated into your application in runtime.
+Generated code is always written under the `lib` directory of your application root, because it is intended to be compiled and used as part of your application at runtime.
 
-#### Custom name space of generated modules
+#### Custom namespace for generated modules
 
-By default, the name space of the generated module is `Oasis.Gen` and its folder path is `lib/oasis/gen`, but we can custom it use these ways:
+By default, generated modules use the `Oasis.Gen` namespace and are written under `lib/oasis/gen`. You can customize that in these ways:
 
-1. As a final global definition when run `oas.gen.plug` mix task, input `--name-space` argument to set this, this argument always overrides all name space even we have some sections of document have special definition (via `"x-oasis-name-space"`), for example:
+1. As a top-level override when running `mix oas.gen.plug`, pass the `--name-space` argument. This always overrides any namespace defined in the specification file via `"x-oasis-name-space"`. For example:
 
   ```
   mix oas.gen.plug --file path/to/petstore-mini.yaml --name-space My.Petstore
@@ -205,9 +203,9 @@ By default, the name space of the generated module is `Oasis.Gen` and its folder
   * creating lib/my/petstore/get_pets.ex
   ```
 
-  Now, we can see the generation folder path is `lib/my/petstore`, let's open the `get_pets.ex` file, the module name changed from `Oasis.Gen.GetPets` to `My.Petstore.GetPets`.
+  The generated folder path is now `lib/my/petstore`, and the module name changes from `Oasis.Gen.GetPets` to `My.Petstore.GetPets`.
 
-2. Use `"x-oasis-name-space"` in the OAS's [Operation Object](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md#operationObject), for example, add this newline `x-oasis-name-space: Common.Api` as below:
+2. Use `"x-oasis-name-space"` in the OAS [Operation Object](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md#operationObject). For example, add `x-oasis-name-space: Common.Api` like this:
 
   ```yaml
     paths:
@@ -223,7 +221,7 @@ By default, the name space of the generated module is `Oasis.Gen` and its folder
         ...
   ```
 
-  Run again, please note this time no `--name-space` argument.
+  Run again without a `--name-space` argument.
 
   ```
   mix oas.gen.plug --file path/to/petstore-mini.yaml
@@ -237,9 +235,9 @@ By default, the name space of the generated module is `Oasis.Gen` and its folder
   * creating lib/common/api/get_pets.ex
   ```
 
-  We can see `pre_get_pets.ex` and `get_pets.ex` files are moved into the expected path, and their module names are `Common.Api.GetPets` and `Common.Api.PreGetPets`, other operations do not define any `"x-oasis-name-space"` field, so they still use the default one `Oasis.Gen`.
+  `pre_get_pets.ex` and `get_pets.ex` are moved into the expected path, and their module names become `Common.Api.GetPets` and `Common.Api.PreGetPets`. Other operations do not define `"x-oasis-name-space"`, so they still use the default `Oasis.Gen` namespace.
 
-3. Use `"x-oasis-name-space"` in the OAS's [Paths Object](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md#pathsObject), this use case as a global setting and can archive it in the document under the file version management, for example, add this newline `x-oasis-name-space: Common.Api` as below:
+3. Use `"x-oasis-name-space"` in the OAS [Paths Object](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md#pathsObject). This works as a global setting and keeps the configuration inside the versioned document itself. For example, add `x-oasis-name-space: Common.Api` like this:
 
   ```yaml
     paths:
@@ -255,7 +253,7 @@ By default, the name space of the generated module is `Oasis.Gen` and its folder
         ...
   ```
 
-  Run again, please note this time no `--name-space` argument, and the GET operation of the "/pets" path is no "x-oasis-name-space" either.
+  Run again without a `--name-space` argument.
 
   ```
   mix oas.gen.plug --file path/to/petstore-mini.yaml
@@ -269,17 +267,19 @@ By default, the name space of the generated module is `Oasis.Gen` and its folder
   * creating lib/common/api/get_pets.ex
   ```
 
-We can see all generated files are moved into the expected path, and all modules' name start with `Common.Api`.
+  All generated files are moved into the expected path, and all module names start with `Common.Api`.
 
-Summarize about the name space of generated module:
+Summary of generated module namespace precedence:
 
-  1. The optional `--name-space` argument to the `mix oas.gen.plug` command line is in the highest priority to set the name space;
+1. The optional `--name-space` argument to `mix oas.gen.plug` has the highest priority.
+2. You can also define the `"x-oasis-name-space"` extension in the specification document to keep this configuration in the document itself. See [the guide](https://hexdocs.pm/oasis/specification_ext.html#module-name-space) for details.
 
-  2. We also can define `"x-oasis-name-space"` extension field in the specification document to make this archivable, please see [here](https://hexdocs.pm/oasis/specification_ext.html#module-name-space) for details.
+#### Paired HTTP request handler files
 
-#### HTTP request handler files in pairs
+Generated HTTP request handler files come in pairs: `pre_operation.ex` and `operation.ex`.
 
-The generated HTTP request handler files are named in pairs, one is `pre_operation.ex`, and another is `operation.ex`, the name beginning with **`pre_`** file is in charge of converting and validating the parameters of each HTTP request definition, the content of this file will be updated according to the section of the document changes or Oasis upgrade in the future, so we ***CAN NOT*** write any business logic in this file; another file is only created in the first time of generation as long as this file does not exist, this is a common `Plug` module which is after the defined preprocessor by `Plug`'s pipeline, we need to fill in business logic in here.
+- The **`pre_`** file converts and validates request parameters. Its contents may change when the OpenAPI document changes or when Oasis changes in future releases, so you should **not** put business logic there.
+- The matching `operation.ex` file is created only the first time, as long as it does not already exist. It is the normal `Plug` module that runs after the generated preprocessing pipeline, and it is the place where you should add your business logic.
 
 ```
 mix oas.gen.plug --file path/to/petstore-mini.yaml
@@ -295,7 +295,7 @@ Generates Router and Plug modules from OAS
 
 #### Integration
 
-After the above generation, let's integrate it, assume the generated router is `Oasis.Gen.Router`, we can use it in the `Plug`'s adapter like this:
+After generating the files, assume the router module is `Oasis.Gen.Router`. You can use it in a `Plug` adapter like this:
 
 ```elixir
 Plug.Adapters.Cowboy.child_spec(
@@ -307,10 +307,10 @@ Plug.Adapters.Cowboy.child_spec(
 )
 ```
 
-Or we can plug this router into the existence router module like this:
+Or you can plug this router into an existing router module like this:
 
 ```elixir
-defmodule MyExistenceRouter do
+defmodule MyExistingRouter do
   use Plug.Router
 
   plug(Oasis.Gen.Router)
@@ -319,17 +319,16 @@ defmodule MyExistenceRouter do
   plug(:dispatch)
 
   # other
-
 end
 ```
 
-Please note that the added line of `plug(Oasis.Gen.Router)` is before the line of `plug(:match)`.
+Make sure `plug(Oasis.Gen.Router)` appears before `plug(:match)`.
 
 ## TODO
 
-1. The Specification contains XML object is not supported so far.
-2. Make document more clear.
-3. There are still some details maybe not implement(or bug) from the OAS, please create an issue or a PR for tracking, thanks in advanced :)
+1. XML Object support is not implemented yet.
+2. Continue improving the documentation.
+3. There may still be unimplemented details or bugs relative to the OAS. Please open an issue or PR to help track them.
 
 ## Reference
 

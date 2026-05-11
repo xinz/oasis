@@ -72,10 +72,10 @@ The corresponding HTTP headers of the request are:
     Authorization: HMAC-SHA256 Credential=mykey_abc&SignedHeaders=date;host;body&Signature=oSBomxpJWcwlhVkif5LV80zecDLpts9Z13+cth1NKV4=
     Body: "{\"name\":\"test\",\"type\":1}"
 
-Refer the best practices, please try to keep the dynamic part of request into the signature.
+As a best practice, try to include the dynamic parts of the request in the signature.
 
-The way to concatenate a `String-To-Sign` is fixed, but there is a flexible customization to define your HTTP headers to sign via `SignedHeaders` field,
-properly keep the value(s) of the signed header(s) for the server side's verification, here are some pseudocode for example:
+The way to concatenate the `String-To-Sign` is fixed, but you can flexibly choose which HTTP headers to sign through the `SignedHeaders` field.
+Keep the values of the signed headers available for server-side verification. For example:
 
     x-oasis-content-sha256: base64_encode(SHA256(body))
     x-oasis-content-md5: base64_encode(MD5(body))
@@ -127,10 +127,9 @@ components:
 
 The `x-oasis-signed-headers` field is a specification extension to define which HTTP header(s) will be used into signature.
 
-Some HTTP client libraries don't let you set the HTTP "Date" header, in this case, we can define an arbitrary naming(should be started with "x-") to represent
-date related, for example, the above specification example defines an `x-oasis-date` HTTP header.
+Some HTTP client libraries do not let you set the HTTP `Date` header. In that case, you can define an arbitrary header name (it should start with `x-`) to represent date-related information. In the example above, that header is `x-oasis-date`.
 
-In the above specification example, the `x-oasis-body-sha256` is a customization HTTP header field, you can name it in a arbitrary naming(should be started with "x-").
+In the same example, `x-oasis-body-sha256` is a custom HTTP header field. You can choose another arbitrary name as long as it starts with `x-`.
 
 ### 2. Generate Code
 
@@ -139,7 +138,7 @@ In the above specification example, the `x-oasis-body-sha256` is a customization
 mix oas.gen.plug --file priv/oas/main.yaml
 ```
 
-Then you will get some similar generated files:
+Then you will get generated files similar to these:
 
 ```elixir
 # lib/oasis/gen/pre_post_test_hmac.ex

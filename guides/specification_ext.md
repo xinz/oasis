@@ -1,6 +1,6 @@
 # Specification Extensions
 
-Oasis be with the following [specification extensions](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md#specificationExtensions) to accommodate some use cases in the defined YAML or JSON specification file.
+Oasis provides the following [specification extensions](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md#specificationExtensions) to support additional use cases in an OpenAPI `3.1.0` YAML or JSON specification file.
 
 ## Module Name Space
 
@@ -13,9 +13,9 @@ Oasis be with the following [specification extensions](https://github.com/OAI/Op
 
 #### In Paths Object
 
-Here, define this field in [Paths Object](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md#pathsObject)
-as a global name space to the all generated modules meanwhile no other special definitions, in the below example
-there will use "Hello.Petstore" to the module naming prefix alias of the all generated modules.
+Here, defining this field in the [Paths Object](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md#pathsObject)
+sets a global namespace for all generated modules when there are no more specific overrides. In the example below,
+all generated modules use `Hello.Petstore` as the module prefix.
 
 ```YAML
 paths:
@@ -32,10 +32,9 @@ paths:
 
 #### In Operation Object
 
-Here, define this field in [Operation Object](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md#operationObject),
-it only affect to a operation related generated modules meanwhile no other special definitions, in the below example
-there will use "Petstore.Api" to the module naming prefix alias of the generated related modules to handler request of "/pets" in HTTP GET verb, other generated modules
-will use `Oasis.Gen` as the default.
+Here, defining this field in the [Operation Object](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md#operationObject)
+affects only the generated modules related to that operation when there are no more specific overrides. In the example below,
+the modules generated for handling `GET /pets` use `Petstore.Api`, while other generated modules still use the default `Oasis.Gen` namespace.
 
 ```YAML
 paths:
@@ -53,9 +52,9 @@ paths:
 
 #### In Security Scheme Object
 
-Here, define this field in [Security Scheme Object](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md#securitySchemeObject),
-it only affect to the generated bearer token module meanwhile no other special definitions, in the below example
-there will use "Petstore.MyToken" to the "helloBearerAuth" module (its full module name is "Petstore.MyToken.HelloBearerAuth").
+Here, defining this field in the [Security Scheme Object](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md#securitySchemeObject)
+affects only the generated bearer token module when there are no more specific overrides. In the example below,
+`helloBearerAuth` becomes `Petstore.MyToken.HelloBearerAuth`.
 
 ```YAML
 paths:
@@ -74,14 +73,11 @@ components:
 
 ### Summary
 
-`"x-oasis-name-space"` can be used at the same time for the above scenarios, but the defined in Security Scheme Object will override the defined in Operation Object for
-the generated bearer token module, the defined in Operation Object will override the defined in Paths Object for the corresponding operation related modules.
+`"x-oasis-name-space"` can be used in all of the scenarios above. A value defined in the Security Scheme Object overrides the value defined in the Operation Object for the generated bearer token module, and a value defined in the Operation Object overrides the value defined in the Paths Object for the corresponding operation-related modules.
 
-We also can set a global name space when run `mix oas.gen.plug` with the `--name-space` argument, it applies to all generated modules and always override the defined from
-the specification file.
+You can also set a global namespace when running `mix oas.gen.plug` with the `--name-space` argument. It applies to all generated modules and always overrides values defined in the specification file.
 
-Follow Elixir's module naming conventions, each dot(".") of module name will split the alias as a directory in lowercase to concat the full directory path,
-and also we do not validate the value of this field in a strict mode, so please follow the usual naming conventions as much as possible.
+Follow normal Elixir module naming conventions. Each dot (`.`) in a module name becomes a lowercase directory component in the generated path. Oasis does not strictly validate this field, so it is best to stick to conventional module naming.
 
 ## Router Module Alias
 
@@ -89,10 +85,9 @@ and also we do not validate the value of this field in a strict mode, so please 
 
 ### Example
 
-When use an OpenAPI Specification to run `mix oas.gen.plug`, there will generate a router file and some corresponding operation handler modules files(in pair),
-the router file packages all defined HTTP router(s) to each hanlder(s), we can custom the module name of the router file by the `"x-oasis-router"` and
-`"x-oasis-name-space"` in the specification file, without other special name space defined, the following example defines the module full name space of the router
-module is "Oasis.Gen.HelloRouter".
+When you run `mix oas.gen.plug` with an OpenAPI specification, Oasis generates a router file and matching operation handler module pairs.
+The router file wires the defined HTTP routes to each handler. You can customize the router module name with `"x-oasis-router"` and `"x-oasis-name-space"` in the specification file.
+Without another namespace override, the following example produces the router module `Oasis.Gen.HelloRouter`.
 
 ```YAML
 paths:
@@ -105,18 +100,17 @@ paths:
 
 ### Summary
 
-We also can set a router name when run `mix oas.gen.plug` with the `--router` argument, it applies to the router module and always override the defined from the specification file.
+You can also set the router name when running `mix oas.gen.plug` with the `--router` argument. It applies only to the router module and always overrides the value defined in the specification file.
 
-Follow Elixir's module naming conventions, each dot(".") of module name will split the alias as a directory in lowercase to concat the full directory path,
-and also we do not validate the value of this field in a strict mode, so please follow the usual naming conventions as much as possible.
+Follow normal Elixir module naming conventions. Each dot (`.`) in a module name becomes a lowercase directory component in the generated path. Oasis does not strictly validate this field, so it is best to stick to conventional module naming.
 
 ## Save Data from Bearer Token
 
-`"x-oasis-key-to-assigns"`, optional, after the verification of the token, the original data will be stored into this provided field (as an atom) of the `conn.assigns` for the next accessing, if not defined it, there won't do any process for the verified original data, please see `Oasis.Plug.BearerAuth` for details.
+`"x-oasis-key-to-assigns"`, optional. After token verification, the original token data is stored in the provided field (as an atom) on `conn.assigns` for later access. If this field is not defined, Oasis does not store the verified original data. See `Oasis.Plug.BearerAuth` for details.
 
 ### Example
 
-Once the input token is verified, we can access the original data(decrypted from token) via `conn.assigns.user_id` in the next plug's pipeline.
+Once the input token is verified, you can access the original token data (decrypted from the token) through `conn.assigns.user_id` later in the Plug pipeline.
 
 ```YAML
 openapi: 3.1.0
@@ -136,7 +130,6 @@ paths:
         - bearerAuth: []
 ```
 
-## Signed Headers for HAMC Authentication
+## Signed Headers for HMAC Authentication
 
-`"x-oasis-signed-headers"`, requried when use HMAC authentication in `security` scheme object, this field represents which HTTP header(s) will be used
-into signature, please see [HMAC-based authentication](hmac_based_authentication.html) document for details.
+`"x-oasis-signed-headers"`, required when using HMAC authentication in a `security` scheme object. This field lists which HTTP headers are included in the signature. See the [HMAC-based authentication](hmac_based_authentication.html) guide for details.
