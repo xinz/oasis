@@ -51,6 +51,8 @@ Oasis does not cover the full OpenAPI specification, so far the implements conta
 
 We also have some OpenAPI Specification Extensions defined for use, please see [our Specification Extensions Guide](https://hexdocs.pm/oasis/specification_ext.html).
 
+For current JSON Schema validation behavior and Draft `2020-12` notes, please also see [the JSON Schema Draft 2020-12 Notes guide](https://hexdocs.pm/oasis/json_schema_draft_2020_12.html).
+
 ## How to use
 
 ### Prepare YAML or JSON specification
@@ -163,6 +165,8 @@ Generates Router and Plug modules from OAS
 * creating lib/oasis/gen/pre_get_pets.ex
 * creating lib/oasis/gen/get_pets.ex
 ```
+
+The generated `pre_*` modules compile nested JSON Schemas at module compile time with `JSONSchex.Schema.compile!/2`, so request validation works with compiled `JSONSchex.Types.Schema` values at runtime. In concise handwritten examples and tests, Oasis may also use `~X` when it is the clearest static schema form.
 
 The arguments of `oas.gen.plug` mix task:
 

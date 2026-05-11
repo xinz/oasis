@@ -11,6 +11,7 @@
 * Refactor generator, build-time metadata, and test support so nested `"schema"` values are compiled `JSONSchex.Types.Schema` structs
 * Simplify runtime validation by using `JSONSchex.Types.Schema` directly in `Oasis.Validator`
 * Update validator, generator, and integration tests to assert compiled-schema behavior and `jsonschex` validation semantics directly
+* Add a guide documenting current Draft `2020-12` validation defaults and compatibility notes
 
 ## v0.6.0 (2026-01-29)
 

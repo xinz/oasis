@@ -60,7 +60,7 @@ defmodule Oasis.MixProject do
 
   defp package do
     [
-      files: ["lib", "mix.exs", "README.md", "LICENSE.md", "priv/templates"],
+      files: ["lib", "guides", "mix.exs", "README.md", "LICENSE.md", "priv/templates"],
       licenses: ["MIT"],
       links: %{
         "GitHub" => @source_url
@@ -78,7 +78,8 @@ defmodule Oasis.MixProject do
         "CHANGELOG.md",
         "guides/handle_errors.md",
         "guides/specification_ext.md",
-        "guides/hmac_based_authentication.md"
+        "guides/hmac_based_authentication.md",
+        "guides/json_schema_draft_2020_12.md"
       ],
       groups_for_modules: groups_for_modules(),
       groups_for_extras: groups_for_extras()
