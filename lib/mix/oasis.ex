@@ -176,8 +176,9 @@ defmodule Mix.Oasis do
     {Macro.escape("schema"), compiled_schema_ast(schema)}
   end
 
-  defp schema_map_entry_to_ast({"schema", schema}) when is_map(schema) or is_boolean(schema) do
-    {Macro.escape("schema"), compile_schema_ast(schema, @jsonschex_compile_options)}
+  defp schema_map_entry_to_ast({"schema", schema}) do
+    raise ArgumentError,
+          "expected nested \"schema\" value to be a compiled JSONSchex.Types.Schema, got: #{inspect(schema, pretty: true)}"
   end
 
   defp schema_map_entry_to_ast({key, value}) do

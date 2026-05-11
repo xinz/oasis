@@ -6,6 +6,16 @@ defmodule Mix.OasisTest do
     schema
   end
 
+  test "render_embedded_schemas requires compiled nested schema values" do
+    assert_raise ArgumentError,
+                 ~r/expected nested "schema" value to be a compiled JSONSchex\.Types\.Schema/,
+                 fn ->
+                   Mix.Oasis.render_embedded_schemas(%{
+                     "id" => %{"schema" => %{"type" => "integer"}}
+                   })
+                 end
+  end
+
   test "name space" do
     assert Mix.Oasis.name_space(nil) == {"Oasis.Gen", "lib/oasis/gen"}
 
