@@ -16,6 +16,16 @@ defmodule Mix.OasisTest do
                  end
   end
 
+  test "compile_json_schema! rejects unresolved OpenAPI component refs" do
+    assert_raise ArgumentError,
+                 ~r/expected OpenAPI component refs to be resolved before schema compilation/,
+                 fn ->
+                   Mix.Oasis.compile_json_schema!(%{
+                     "$ref" => "#/components/schemas/User"
+                   })
+                 end
+  end
+
   test "name space" do
     assert Mix.Oasis.name_space(nil) == {"Oasis.Gen", "lib/oasis/gen"}
 

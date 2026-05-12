@@ -5,7 +5,7 @@ defmodule Oasis.Spec.RefResolver do
 
   @spec expand_local_refs(map()) :: map()
   def expand_local_refs(document) when is_map(document) do
-    expand_value(document, document)
+    expand_value(document, document, [])
   end
 
   @spec resolve_local_ref!(map(), String.t()) :: term()
@@ -24,28 +24,33 @@ defmodule Oasis.Spec.RefResolver do
     end
   end
 
-  defp expand_value(document, value) when is_list(value) do
-    Enum.map(value, &expand_value(document, &1))
+  defp expand_value(document, value, path) when is_list(value) do
+    value
+    |> Enum.with_index()
+    |> Enum.map(fn {item, index} ->
+      expand_value(document, item, path ++ [index])
+    end)
   end
 
-  defp expand_value(document, %{"$ref" => ref}) do
+  defp expand_value(document, %{"$ref" => ref}, path) do
     document
     |> resolve_local_ref!(ref)
-    |> then(&expand_value(document, &1))
+    |> then(&expand_value(document, &1, path))
   end
 
-  defp expand_value(document, value) when is_map(value) do
+  defp expand_value(document, value, path) when is_map(value) do
     Enum.reduce(value, %{}, fn {key, nested_value}, acc ->
       if Map.has_key?(acc, key) do
         raise InvalidSpecError,
               "Defined a duplicated field: `#{key}` key as:\n#{inspect(%{key => nested_value}, pretty: true)} \n to \n#{inspect(acc, pretty: true)}"
       else
-        Map.put(acc, key, expand_value(document, nested_value))
+        Map.put(acc, key, expand_value(document, nested_value, path ++ [key]))
       end
     end)
   end
 
-  defp expand_value(_document, value), do: value
+  defp expand_value(_document, value, _path), do: value
+
 
   defp validate_local_ref!("#"), do: :ok
   defp validate_local_ref!("#/" <> _path), do: :ok

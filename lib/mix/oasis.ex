@@ -140,6 +140,8 @@ defmodule Mix.Oasis do
   def compile_json_schema!(%JSONSchex.Types.Schema{} = schema), do: schema
 
   def compile_json_schema!(schema) when is_map(schema) or is_boolean(schema) do
+    ensure_no_openapi_component_refs!(schema)
+
     case JSONSchex.compile(schema, @jsonschex_compile_options) do
       {:ok, compiled} ->
         compiled
@@ -204,6 +206,32 @@ defmodule Mix.Oasis do
       content_assertion: schema.content_assertion
     ]
   end
+
+  defp ensure_no_openapi_component_refs!(schema) when is_map(schema) do
+    find_openapi_component_ref(schema)
+    |> case do
+      nil ->
+        :ok
+
+      ref ->
+        raise ArgumentError,
+              "expected OpenAPI component refs to be resolved before schema compilation, got unresolved ref: #{ref}"
+    end
+  end
+
+  defp ensure_no_openapi_component_refs!(_schema), do: :ok
+
+  defp find_openapi_component_ref(%{"$ref" => "#/components/" <> _ = ref}), do: ref
+
+  defp find_openapi_component_ref(%{} = map) do
+    Enum.find_value(map, fn {_key, value} -> find_openapi_component_ref(value) end)
+  end
+
+  defp find_openapi_component_ref(list) when is_list(list) do
+    Enum.find_value(list, &find_openapi_component_ref/1)
+  end
+
+  defp find_openapi_component_ref(_value), do: nil
 
   defp entry_sort_key({key, _value}), do: :erlang.term_to_binary(key)
 

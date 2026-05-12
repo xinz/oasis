@@ -130,6 +130,43 @@ defmodule Oasis.Spec.RefResolverTest do
              content_param["in"] == "query"
   end
 
+  test "schema $ref siblings are ignored" do
+    document = %{
+      "components" => %{
+        "schemas" => %{
+          "StringBase" => %{"type" => "string"},
+          "ShortTag" => %{
+            "$ref" => "#/components/schemas/StringBase",
+            "maxLength" => 10,
+            "description" => "short tag"
+          },
+          "BaseObject" => %{
+            "type" => "object",
+            "properties" => %{"id" => %{"type" => "integer"}},
+            "required" => ["id"]
+          },
+          "MergedObject" => %{
+            "$ref" => "#/components/schemas/BaseObject",
+            "properties" => %{"tag" => %{"type" => "string"}},
+            "required" => ["tag"]
+          }
+        }
+      }
+    }
+
+    expanded = RefResolver.expand_local_refs(document)
+
+    assert get_in(expanded, ["components", "schemas", "ShortTag"]) == %{
+             "type" => "string"
+           }
+
+    assert get_in(expanded, ["components", "schemas", "MergedObject"]) == %{
+             "type" => "object",
+             "properties" => %{"id" => %{"type" => "integer"}},
+             "required" => ["id"]
+           }
+  end
+
   test "resolve local refs through maps and arrays" do
     document = %{
       "components" => %{
