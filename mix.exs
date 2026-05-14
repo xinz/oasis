@@ -46,6 +46,7 @@ defmodule Oasis.MixProject do
       {:yaml_elixir, "~> 2.5"},
       {:plug, "~> 1.11"},
       {:plug_crypto, "~> 1.2"},
+      {:jason, "~> 1.4", optional: true},
       {:jsonschex, github: "xinz/jsonschex", branch: "ref"},
       {:ex_json_pointer, "~> 0.6"},
       {:recase, "~> 0.7", runtime: false},
