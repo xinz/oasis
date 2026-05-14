@@ -9,10 +9,10 @@ defmodule Oasis.JSON do
 
   alias JSONSchex.JSON, as: BackendJSON
 
-  @spec decode(iodata()) :: {:ok, term()} | {:error, term()}
+  @spec decode(binary()) :: {:ok, term()} | {:error, term()}
   defdelegate decode(data), to: BackendJSON
 
-  @spec decode!(iodata()) :: term()
+  @spec decode!(binary()) :: term()
   defdelegate decode!(data), to: BackendJSON
 
   @spec encode!(term()) :: iodata()

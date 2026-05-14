@@ -87,6 +87,10 @@ defmodule Oasis.MixProject do
 
   defp groups_for_modules() do
     [
+      Core: [
+        Oasis.JSON,
+        Oasis.Controller
+      ],
       Plugs: [
         Oasis.Plug.BearerAuth,
         Oasis.Plug.HMACAuth,

@@ -166,6 +166,8 @@ Generates Router and Plug modules from OAS
 
 The generated `pre_*` modules compile nested JSON Schemas at module compile time with `JSONSchex.Schema.compile!/2`, so request validation works with compiled `JSONSchex.Types.Schema` values at runtime. In concise handwritten examples and tests, Oasis may also use `~X` when it is the clearest static schema form.
 
+Generated routers and helpers use `Oasis.JSON` as the JSON encoder/decoder module. `Oasis.JSON` is the stable Oasis-owned wrapper for JSON operations and delegates to JSON in Elixir v1.18+ or Jason for earlier versions
+
 The `oas.gen.plug` mix task accepts these arguments:
 
 * `--file` — required. The full path to the specification file in YAML or JSON format.
