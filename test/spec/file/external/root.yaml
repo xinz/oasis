@@ -1,0 +1,21 @@
+openapi: 3.1.0
+info:
+  title: External Ref API
+  version: 1.0.0
+paths:
+  /pets/{id}:
+    parameters:
+      - $ref: '#/components/parameters/PetId'
+    get:
+      operationId: get_pet
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/pet_list.yaml#/PetList'
+components:
+  parameters:
+    PetId:
+      $ref: './components/params.yaml#/PetId'

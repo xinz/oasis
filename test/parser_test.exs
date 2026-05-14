@@ -148,7 +148,7 @@ defmodule Oasis.ParserTest do
     expected = %{"number" => 1600, "street_name" => "hello", "flag" => true}
     assert parse(type, input) == expected
 
-    input = Jason.encode!(expected)
+    input = Oasis.JSON.encode!(expected)
     assert parse(type, input) == expected
 
     assert_raise ArgumentError, ~r/argument error/, fn ->

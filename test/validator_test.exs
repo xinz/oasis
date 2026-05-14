@@ -223,7 +223,7 @@ defmodule Oasis.ValidatorTest do
 
     name = "test_array"
     data = [1, 2, 3]
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
     assert parse_and_validate!(param, "header", name, input) == data
   end
 
@@ -253,26 +253,26 @@ defmodule Oasis.ValidatorTest do
 
     name = "test_array"
     data = [1600, "Pennsylvania", "Avenue", "NW"]
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
     assert parse_and_validate!(param, "header", name, input) == data
 
     data = [10, "Downing", "Street"]
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
     assert parse_and_validate!(param, "header", name, input) == data
 
     data = [1600, "Pennsylvania", "Avenue", "NW", "Washington"]
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
     assert parse_and_validate!(param, "path", name, input) == data
 
     data = ["a", "b", "c", "Sussex", "Drive"]
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
 
     assert_raise Oasis.BadRequestError, ~r/At \/0: Expected type integer, got string/, fn ->
       parse_and_validate!(param, "query", name, input)
     end
 
     data = [1600, "Pennsylvania", "Avenue", "NW", "Washington"]
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
     assert parse_and_validate!(param, "query", name, input) == data
 
     param = %{
@@ -301,11 +301,11 @@ defmodule Oasis.ValidatorTest do
 
     name = "test_array"
     data = [1600, "Pennsylvania", "Avenue", "NW", "Washington"]
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
     assert parse_and_validate!(param, "query", name, input) == data
 
     data = [1600, "Pennsylvania", "Avenue", "NW", 1000]
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
 
     assert_raise Oasis.BadRequestError, ~r/At \/4: Expected type string, got integer/, fn ->
       parse_and_validate!(param, "query", name, input)
@@ -322,22 +322,22 @@ defmodule Oasis.ValidatorTest do
 
     name = "test_name"
     data = []
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
 
     assert_raise Oasis.BadRequestError, ~r/Array has 0 items, minimum is 2/, fn ->
       parse_and_validate!(param, "query", name, input)
     end
 
     data = [1, 2]
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
     assert parse_and_validate!(param, "query", name, input) == data
 
     data = [3, 2, 1]
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
     assert parse_and_validate!(param, "query", name, input) == data
 
     data = [1, 2, 3, 4, 5]
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
 
     assert_raise Oasis.BadRequestError, ~r/Array has 5 items, maximum is 3/, fn ->
       parse_and_validate!(param, "query", name, input)
@@ -356,11 +356,11 @@ defmodule Oasis.ValidatorTest do
 
     name = "test_name"
     data = [1, 2, 3, 4]
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
     assert parse_and_validate!(param, "query", name, input) == data
 
     data = [1, 2, 3, 2, 4]
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
 
     assert_raise Oasis.BadRequestError, ~r/duplicate item|unique/i, fn ->
       parse_and_validate!(param, "query", name, input)
@@ -385,11 +385,11 @@ defmodule Oasis.ValidatorTest do
 
     name = "test_array"
     data = %{"number" => 100}
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
     assert parse_and_validate!(param, "query", name, input) == data
 
     data = %{"number" => 100, "street_name" => "abc", "street_type" => "Avenue"}
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
     assert parse_and_validate!(param, "query", name, input) == data
 
     data = %{
@@ -399,11 +399,11 @@ defmodule Oasis.ValidatorTest do
       "addition" => 2021
     }
 
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
     assert parse_and_validate!(param, "query", name, input) == data
 
     data = %{"number" => "100", "street_name" => "abc", "street_type" => 1}
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
 
     assert_raise Oasis.BadRequestError, ~r/At \/number: Expected type number, got string/, fn ->
       parse_and_validate!(param, "query", name, input)
@@ -429,14 +429,14 @@ defmodule Oasis.ValidatorTest do
 
     name = "test_array"
     data = %{"number" => 1, "street_type" => "Street"}
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
 
     assert_raise Oasis.BadRequestError, ~r/Missing required properties: street_name/, fn ->
       parse_and_validate!(param, "query", name, input)
     end
 
     data = %{"number" => 1, "street_name" => "test street name"}
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
     assert parse_and_validate!(param, "query", name, input) == data
   end
 
@@ -468,14 +468,14 @@ defmodule Oasis.ValidatorTest do
       "billing_address" => "100 street"
     }
 
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
     assert parse_and_validate!(param, "query", name, input) == data
 
     data = %{
       "name" => "test_name"
     }
 
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
     assert parse_and_validate!(param, "query", name, input) == data
 
     data = %{
@@ -483,7 +483,7 @@ defmodule Oasis.ValidatorTest do
       "credit_card" => 111_111_111_111
     }
 
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
 
     assert_raise Oasis.BadRequestError,
                  ~r/Dependency failure: 'credit_card' requires \["billing_address"\]/,
@@ -496,7 +496,7 @@ defmodule Oasis.ValidatorTest do
       "billing_address" => "100 street"
     }
 
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
 
     assert_raise Oasis.BadRequestError,
                  ~r/Dependency failure: 'billing_address' requires \["credit_card"\]/,
@@ -523,22 +523,22 @@ defmodule Oasis.ValidatorTest do
 
     name = "test"
     data = %{"S_25" => "test string"}
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
     assert parse_and_validate!(param, "query", name, input) == data
 
     data = %{"I_0" => 0}
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
     assert parse_and_validate!(param, "query", name, input) == data
 
     data = %{"S_0" => 0}
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
 
     assert_raise Oasis.BadRequestError, ~r/At \/S_0: Expected type string, got integer/, fn ->
       parse_and_validate!(param, "query", name, input)
     end
 
     data = %{"I_1" => "1"}
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
 
     assert_raise Oasis.BadRequestError, ~r/At \/I_1: Expected type integer, got string/, fn ->
       parse_and_validate!(param, "query", name, input)
@@ -561,26 +561,26 @@ defmodule Oasis.ValidatorTest do
 
     data = %{"builtin" => 1}
     name = "test"
-    value = Jason.encode!(data)
+    value = Oasis.JSON.encode!(data)
     assert parse_and_validate!(param, "query", name, value) == data
 
     data = %{"I_25" => 0, "builtin" => 1}
-    value = Jason.encode!(data)
+    value = Oasis.JSON.encode!(data)
     assert parse_and_validate!(param, "query", name, value) == data
 
     data = %{"I_25" => 0, "builtin" => 1, "otherfield" => "string"}
-    value = Jason.encode!(data)
+    value = Oasis.JSON.encode!(data)
     assert parse_and_validate!(param, "query", name, value) == data
 
     data = %{"S_25" => 0, "builtin" => 1, "otherfield" => "string"}
-    value = Jason.encode!(data)
+    value = Oasis.JSON.encode!(data)
 
     assert_raise Oasis.BadRequestError, ~r/At \/S_25: Expected type string, got integer/, fn ->
       parse_and_validate!(param, "query", name, value) == data
     end
 
     data = %{"I_25" => 0, "builtin" => 1, "otherfield" => 1}
-    value = Jason.encode!(data)
+    value = Oasis.JSON.encode!(data)
 
     assert_raise Oasis.BadRequestError,
                  ~r/At \/otherfield: Expected type string, got integer/,
@@ -589,7 +589,7 @@ defmodule Oasis.ValidatorTest do
                  end
 
     data = %{"otherfield" => 1}
-    value = Jason.encode!(data)
+    value = Oasis.JSON.encode!(data)
 
     assert_raise Oasis.BadRequestError,
                  ~r/At \/otherfield: Expected type string, got integer/,
@@ -617,13 +617,13 @@ defmodule Oasis.ValidatorTest do
 
     name = "local"
     data = %{"lat" => 12.01, "long" => 93.1}
-    formatted = parse_and_validate!(param, "header", name, Jason.encode!(data))
+    formatted = parse_and_validate!(param, "header", name, Oasis.JSON.encode!(data))
     assert formatted == data
 
     data = %{"lat" => 43.21}
 
     assert_raise Oasis.BadRequestError, ~r/Missing required properties: long/, fn ->
-      parse_and_validate!(param, "header", name, Jason.encode!(data))
+      parse_and_validate!(param, "header", name, Oasis.JSON.encode!(data))
     end
   end
 
@@ -675,7 +675,7 @@ defmodule Oasis.ValidatorTest do
 
     name = "test_name"
     data = ["1", "2", "3"]
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
     formatted_value = parse_and_validate!(param, "query", name, input)
 
     assert formatted_value == data
@@ -698,7 +698,7 @@ defmodule Oasis.ValidatorTest do
 
     name = "test_name"
     data = [1, 2, 3]
-    input = Jason.encode!(data)
+    input = Oasis.JSON.encode!(data)
     formatted_value = parse_and_validate!(param, "query", name, input)
 
     assert formatted_value == data
@@ -854,7 +854,7 @@ defmodule Oasis.ValidatorTest do
     name = "username"
     assert parse_and_validate!(param, "query", name, input) == input
 
-    input = Jason.encode(%{"a" => 1, "b" => 2})
+    input = Oasis.JSON.encode!(%{"a" => 1, "b" => 2})
     assert parse_and_validate!(param, "query", name, input) == input
   end
 

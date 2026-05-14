@@ -321,7 +321,7 @@ defmodule Mix.Oasis.Router do
 
     acc
     |> Keyword.put(:parsers, parsers)
-    |> Keyword.put(:json_decoder, Jason)
+    |> Keyword.put(:json_decoder, Oasis.JSON)
   end
 
   defp map_plug_parsers(_, acc), do: acc

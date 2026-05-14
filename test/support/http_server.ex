@@ -42,7 +42,7 @@ defmodule Oasis.HTTPServer.PlugRouter do
 
     conn
     |> put_resp_content_type("application/json")
-    |> send_resp(200, Jason.encode!(%{"local_var_id" => id, "conn_params" => conn.params}))
+    |> send_resp(200, Oasis.JSON.encode!(%{"local_var_id" => id, "conn_params" => conn.params}))
   end
 
   get("/test_query/:id",

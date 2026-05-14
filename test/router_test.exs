@@ -20,7 +20,7 @@ defmodule Oasis.RouterTest do
           }
         }
       } do
-      resp(conn, 200, Jason.encode!(%{bar: bar}))
+      resp(conn, 200, Oasis.JSON.encode!(%{bar: bar}))
     end
 
     head "/head" do
@@ -47,7 +47,7 @@ defmodule Oasis.RouterTest do
           }
         }
       } do
-      resp(conn, 200, Jason.encode!(%{id: id}))
+      resp(conn, 200, Oasis.JSON.encode!(%{id: id}))
     end
 
     post "/post/:page_id",
@@ -58,7 +58,7 @@ defmodule Oasis.RouterTest do
           }
         }
       } do
-      resp(conn, 200, Jason.encode!(%{page_id: page_id}))
+      resp(conn, 200, Oasis.JSON.encode!(%{page_id: page_id}))
     end
 
     delete "/delete/:user_id/:group_id",
@@ -72,7 +72,7 @@ defmodule Oasis.RouterTest do
           }
         }
       } do
-      resp(conn, 200, Jason.encode!(%{user_id: user_id, group_id: group_id}))
+      resp(conn, 200, Oasis.JSON.encode!(%{user_id: user_id, group_id: group_id}))
     end
 
     def handle_errors(conn, %{kind: _kind, reason: reason, stack: _stack}) do
@@ -114,21 +114,21 @@ defmodule Oasis.RouterTest do
     conn = call(Sample, conn(:get, "/foo/2"))
     assert conn.params["bar"] == "2"
     assert conn.path_params["bar"] == "2"
-    assert Jason.decode!(conn.resp_body) == %{"bar" => "2"}
+    assert Oasis.JSON.decode!(conn.resp_body) == %{"bar" => "2"}
   end
 
   test "parse and assigns path params to conn params and path_params in GET request" do
     conn = call(Sample, conn(:get, "/get/100"))
     assert conn.params["id"] == 100
     assert conn.path_params["id"] == 100
-    assert Jason.decode!(conn.resp_body) == %{"id" => 100}
+    assert Oasis.JSON.decode!(conn.resp_body) == %{"id" => 100}
   end
 
   test "parse and assigns path params to conn params and path_params in POST request" do
     conn = call(Sample, conn(:post, "/post/1"))
     assert conn.params["page_id"] == 1
     assert conn.path_params["page_id"] == 1
-    assert Jason.decode!(conn.resp_body) == %{"page_id" => 1}
+    assert Oasis.JSON.decode!(conn.resp_body) == %{"page_id" => 1}
   end
 
   test "parse and assigns path params to conn params and path_params in DELETE request" do
@@ -137,7 +137,7 @@ defmodule Oasis.RouterTest do
     assert conn.params["group_id"] == "abcdef"
     assert conn.path_params["user_id"] == 1
     assert conn.path_params["group_id"] == "abcdef"
-    assert Jason.decode!(conn.resp_body) == %{"user_id" => 1, "group_id" => "abcdef"}
+    assert Oasis.JSON.decode!(conn.resp_body) == %{"user_id" => 1, "group_id" => "abcdef"}
   end
 
   test "handler_errors/2 in generated plug module" do

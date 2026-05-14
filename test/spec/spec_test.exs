@@ -63,4 +63,40 @@ defmodule Oasis.Spec.SpecTest do
     assert :ok = JSONSchex.validate(schema, %{"refresh_token" => "123"})
     assert {:error, _} = JSONSchex.validate(schema, %{})
   end
+
+  test "parse relative external refs" do
+    file_path = Path.join([@dir, "external", "root.yaml"])
+    %Oasis.Spec.Document{schema: schema} = Oasis.Spec.read(file_path)
+
+    get_operation = get_in(schema, ["paths", "/pets/:id", "get"])
+
+    assert get_in(get_operation, ["parameters", "path"]) == [
+             %{
+               "name" => "id",
+               "in" => "path",
+               "required" => true,
+               "schema" => %{"type" => "integer"}
+             }
+           ]
+
+    assert get_in(get_operation, ["responses", "200", "content", "application/json", "schema"]) == %{
+             "type" => "array",
+             "items" => %{
+               "type" => "object",
+               "required" => ["id", "name"],
+               "properties" => %{
+                 "id" => %{"type" => "integer"},
+                 "name" => %{"type" => "string"}
+               }
+             }
+           }
+  end
+
+  test "missing external ref file raises invalid spec error" do
+    file_path = Path.join([@dir, "external", "missing_file.yaml"])
+
+    assert_raise Oasis.InvalidSpecError, ~r/Could not load external ref file/, fn ->
+      Oasis.Spec.read(file_path)
+    end
+  end
 end

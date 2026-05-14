@@ -19,7 +19,7 @@ defmodule Oasis.Parser do
 
   defp do_parse(%{"type" => type}, value)
        when is_bitstring(value) and type in ["array", "object"] do
-    case Jason.decode(value) do
+    case Oasis.JSON.decode(value) do
       {:ok, value} ->
         value
 

@@ -6,7 +6,7 @@ defmodule Oasis.Gen.Plug.PreTestPostJSON do
   plug(
     Plug.Parsers,
     parsers: [:json],
-    json_decoder: Jason,
+    json_decoder: Oasis.JSON,
     pass: ["*/*"]
   )
 

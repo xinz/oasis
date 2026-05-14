@@ -25,7 +25,7 @@ defmodule Oasis.IntegrationTest do
              Finch.build(:post, "#{url}/test_post_non_validate", headers, body)
              |> Finch.request(TestFinch)
 
-    body = Jason.decode!(response.body)
+    body = Oasis.JSON.decode!(response.body)
     assert %{"v1" => "k1", "v2" => "k2"} == body["body_params"]
   end
 
@@ -54,7 +54,7 @@ defmodule Oasis.IntegrationTest do
 
     id = 1
     assert {:ok, response} = Finch.build(:get, "#{url}/id/#{id}") |> Finch.request(TestFinch)
-    body = Jason.decode!(response.body)
+    body = Oasis.JSON.decode!(response.body)
     assert body["local_var_id"] == id
 
     # when `id` parameter naming duplicated, follow `Plug`'s params mergence logic,
@@ -64,7 +64,7 @@ defmodule Oasis.IntegrationTest do
     assert {:ok, response} =
              Finch.build(:get, "#{url}/id/#{id}?id=123&a=1") |> Finch.request(TestFinch)
 
-    body = Jason.decode!(response.body)
+    body = Oasis.JSON.decode!(response.body)
     assert body["local_var_id"] == id and body["conn_params"]["id"] == id
 
     id = "non-integer"
@@ -86,7 +86,7 @@ defmodule Oasis.IntegrationTest do
              Finch.build(:get, "#{url}/test_query/#{id}?" <> query_string)
              |> Finch.request(TestFinch)
 
-    body = Jason.decode!(response.body)
+    body = Oasis.JSON.decode!(response.body)
     conn_params = body["conn_params"]
     query_params = body["query_params"]
 
@@ -103,7 +103,7 @@ defmodule Oasis.IntegrationTest do
              Finch.build(:get, "#{url}/test_query/#{id}?" <> query_string)
              |> Finch.request(TestFinch)
 
-    body = Jason.decode!(response.body)
+    body = Oasis.JSON.decode!(response.body)
     conn_params = body["conn_params"]
     query_params = body["query_params"]
 
@@ -171,7 +171,7 @@ defmodule Oasis.IntegrationTest do
              Finch.build(:get, "#{url}/test_query/#{id}?" <> query_string)
              |> Finch.request(TestFinch)
 
-    body = Jason.decode!(response.body)
+    body = Oasis.JSON.decode!(response.body)
     conn_params_from_resp = body["conn_params"]
     query_params_from_resp = body["query_params"]
 
@@ -200,13 +200,13 @@ defmodule Oasis.IntegrationTest do
     profile_name = "testname"
     profile = %{"tag" => profile_tag, "name" => profile_name}
 
-    query_string = URI.encode_query(lang: lang, profile: Jason.encode!(profile))
+    query_string = URI.encode_query(lang: lang, profile: Oasis.JSON.encode!(profile))
 
     assert {:ok, response} =
              Finch.build(:get, "#{url}/test_query/#{id}?" <> query_string)
              |> Finch.request(TestFinch)
 
-    body = Jason.decode!(response.body)
+    body = Oasis.JSON.decode!(response.body)
     conn_params = body["conn_params"]
     query_params = body["query_params"]
 
@@ -219,7 +219,7 @@ defmodule Oasis.IntegrationTest do
 
     profile_tag = "invalid"
     profile = %{profile | "tag" => profile_tag}
-    query_string = URI.encode_query(lang: lang, profile: Jason.encode!(profile))
+    query_string = URI.encode_query(lang: lang, profile: Oasis.JSON.encode!(profile))
 
     assert {:ok, response} =
              Finch.build(:get, "#{url}/test_query/#{id}?" <> query_string)
@@ -234,25 +234,25 @@ defmodule Oasis.IntegrationTest do
     start_supervised!({Finch, name: TestFinch})
 
     items = [1, 2, 3]
-    headers = [{"items", Jason.encode!(items)}]
+    headers = [{"items", Oasis.JSON.encode!(items)}]
 
     assert {:ok, response} =
              Finch.build(:get, "#{url}/test_header", headers) |> Finch.request(TestFinch)
 
-    body = Jason.decode!(response.body)
+    body = Oasis.JSON.decode!(response.body)
     assert body["items"] == items
 
     # all headers naming will be downcased
-    headers = [{"iTeMs", Jason.encode!(items)}]
+    headers = [{"iTeMs", Oasis.JSON.encode!(items)}]
 
     assert {:ok, response} =
              Finch.build(:get, "#{url}/test_header", headers) |> Finch.request(TestFinch)
 
-    body = Jason.decode!(response.body)
+    body = Oasis.JSON.decode!(response.body)
     assert body["items"] == items
 
     items = ["a", "b", "c"]
-    headers = [{"items", Jason.encode!(items)}]
+    headers = [{"items", Oasis.JSON.encode!(items)}]
 
     assert {:ok, response} =
              Finch.build(:get, "#{url}/test_header", headers) |> Finch.request(TestFinch)
@@ -302,7 +302,7 @@ defmodule Oasis.IntegrationTest do
     assert {:ok, response} =
              Finch.build(:get, "#{url}/test_cookie", headers) |> Finch.request(TestFinch)
 
-    body = Jason.decode!(response.body)
+    body = Oasis.JSON.decode!(response.body)
     assert body == %{"req_cookies" => %{"items" => [1, 2, 3]}}
 
     resp_cookies =
@@ -320,7 +320,7 @@ defmodule Oasis.IntegrationTest do
     assert {:ok, response} =
              Finch.build(:get, "#{url}/test_cookie", headers) |> Finch.request(TestFinch)
 
-    body = Jason.decode!(response.body)
+    body = Oasis.JSON.decode!(response.body)
 
     # DO NOT process signed / encrypted cookie, reserved for specific business processing
     %{"items" => items, "testcookie1" => signed_cookie1, "testcookie2" => signed_cookie2} =
@@ -340,7 +340,7 @@ defmodule Oasis.IntegrationTest do
              Finch.build(:post, "#{url}/test_post_urlencoded?q1=123", headers, body)
              |> Finch.request(TestFinch)
 
-    body = Jason.decode!(response.body)
+    body = Oasis.JSON.decode!(response.body)
 
     %{"fav_number" => fav_number, "name" => name} = body["body_params"]
     assert fav_number == 1 and name == "v1"
@@ -362,7 +362,7 @@ defmodule Oasis.IntegrationTest do
              )
              |> Finch.request(TestFinch)
 
-    body = Jason.decode!(response.body)
+    body = Oasis.JSON.decode!(response.body)
     body_params = body["body_params"]
     params = body["params"]
 
@@ -411,7 +411,7 @@ defmodule Oasis.IntegrationTest do
              Finch.build(:post, "#{url}/test_post_multipart", headers, multipart)
              |> Finch.request(TestFinch)
 
-    body = Jason.decode!(response.body)
+    body = Oasis.JSON.decode!(response.body)
     body_params = body["body_params"]
     assert %{"id" => 1, "username" => "hello"} = body_params
 
@@ -459,7 +459,7 @@ defmodule Oasis.IntegrationTest do
              Finch.build(:post, "#{url}/test_post_multipart", headers, multipart)
              |> Finch.request(TestFinch)
 
-    body = Jason.decode!(response.body)
+    body = Oasis.JSON.decode!(response.body)
     body_params = body["body_params"]
 
     assert %{
@@ -514,7 +514,7 @@ defmodule Oasis.IntegrationTest do
              Finch.build(:post, "#{url}/test_post_json", headers, body)
              |> Finch.request(TestFinch)
 
-    body = Jason.decode!(response.body)
+    body = Oasis.JSON.decode!(response.body)
 
     assert response.status == 200 and
              body["body_params"] == [%{"id" => 1, "name" => "hello"}] and
@@ -527,7 +527,7 @@ defmodule Oasis.IntegrationTest do
              Finch.build(:post, "#{url}/test_post_json", headers, body)
              |> Finch.request(TestFinch)
 
-    body = Jason.decode!(response.body)
+    body = Oasis.JSON.decode!(response.body)
 
     assert response.status == 200 and
              body["body_params"] == 1 and
@@ -540,7 +540,7 @@ defmodule Oasis.IntegrationTest do
              Finch.build(:post, "#{url}/test_post_json", headers, body)
              |> Finch.request(TestFinch)
 
-    body = Jason.decode!(response.body)
+    body = Oasis.JSON.decode!(response.body)
 
     assert response.status == 200 and
              body["body_params"] == 1.5 and
@@ -567,7 +567,7 @@ defmodule Oasis.IntegrationTest do
              Finch.build(:post, "#{url}/test_post_json", headers, body)
              |> Finch.request(TestFinch)
 
-    body = Jason.decode!(response.body)
+    body = Oasis.JSON.decode!(response.body)
 
     assert response.status == 200 and
              body["body_params"]["_json"] == %{
@@ -589,7 +589,7 @@ defmodule Oasis.IntegrationTest do
 
     assert response.body == "Missing a required parameter"
 
-    query_string = URI.encode_query(id: 1, relation_ids: Jason.encode!([1, 2, 3]))
+    query_string = URI.encode_query(id: 1, relation_ids: Oasis.JSON.encode!([1, 2, 3]))
 
     assert {:ok, response} =
              Finch.build(:delete, "#{url}/test_delete?" <> query_string, headers, body)
@@ -598,7 +598,7 @@ defmodule Oasis.IntegrationTest do
     assert response.body ==
              "Find query parameter `relation_ids` with error: At /0: Expected type string, got integer"
 
-    query_string = URI.encode_query(id: 1, relation_ids: Jason.encode!(["1", "2", "3"]))
+    query_string = URI.encode_query(id: 1, relation_ids: Oasis.JSON.encode!(["1", "2", "3"]))
 
     assert {:ok, response} =
              Finch.build(:delete, "#{url}/test_delete?" <> query_string, headers, body)
@@ -606,7 +606,7 @@ defmodule Oasis.IntegrationTest do
 
     assert response.status == 200
 
-    body = Jason.decode!(response.body)
+    body = Oasis.JSON.decode!(response.body)
 
     # no any body schema use to validate
     assert %{"k1" => "1", "k2" => "2"} == body["body_params"]
@@ -640,13 +640,13 @@ defmodule Oasis.IntegrationTest do
       Finch.build(:post, "#{url}/sign_bearer_auth", headers, body) |> Finch.request(TestFinch)
 
     assert response.status == 200
-    token = Jason.decode!(response.body)["token"]
+    token = Oasis.JSON.decode!(response.body)["token"]
 
     headers = [{"authorization", "Bearer " <> token}]
     {:ok, response} = Finch.build(:get, "#{url}/bearer_auth", headers) |> Finch.request(TestFinch)
 
     assert response.status == 200
-    id = Jason.decode!(response.body)["id"]
+    id = Oasis.JSON.decode!(response.body)["id"]
     assert id == "abcdef"
 
     # be with an invalid query parameter
@@ -663,7 +663,7 @@ defmodule Oasis.IntegrationTest do
     {:ok, response} = Finch.build(:get, "#{url}/bearer_auth", headers) |> Finch.request(TestFinch)
 
     assert response.status == 401
-    assert Jason.decode!(response.body)["status"] == "invalid token"
+    assert Oasis.JSON.decode!(response.body)["status"] == "invalid token"
 
     {_, authenticate} = List.keyfind(response.headers, "www-authenticate", 0)
     assert authenticate =~ ~s|Bearer realm=|
@@ -699,7 +699,7 @@ defmodule Oasis.IntegrationTest do
       Finch.build(:post, "#{url}/sign_bearer_auth", headers, body) |> Finch.request(TestFinch)
 
     assert response.status == 200
-    token = Jason.decode!(response.body)["token"]
+    token = Oasis.JSON.decode!(response.body)["token"]
 
     headers = [{"authorization", "Bearer " <> token}]
 
@@ -707,7 +707,7 @@ defmodule Oasis.IntegrationTest do
       Finch.build(:get, "#{url}/bearer_auth?max_age=-1", headers) |> Finch.request(TestFinch)
 
     assert response.status == 401
-    assert Jason.decode!(response.body)["status"] == "invalid token"
+    assert Oasis.JSON.decode!(response.body)["status"] == "invalid token"
 
     {_, authenticate} = List.keyfind(response.headers, "www-authenticate", 0)
     assert authenticate =~ ~s|Bearer realm=|
@@ -742,7 +742,7 @@ defmodule Oasis.IntegrationTest do
              Finch.build(:post, "#{url}/test_files_upload", headers, multipart)
              |> Finch.request(TestFinch)
 
-    body = Jason.decode!(response.body)
+    body = Oasis.JSON.decode!(response.body)
 
     assert body["uploaded"] == 2 and body["with_logo"] == true
 

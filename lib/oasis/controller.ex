@@ -66,7 +66,7 @@ defmodule Oasis.Controller do
   @doc """
   Sends JSON response.
 
-  It uses `Jason` to encode the input as an iodata data.
+  Encodes the input as iodata via `Oasis.JSON`.
 
   ## Examples
 
@@ -75,7 +75,7 @@ defmodule Oasis.Controller do
   """
   @spec json(Plug.Conn.t(), term) :: Plug.Conn.t()
   def json(conn, data) do
-    response = Jason.encode_to_iodata!(data)
+    response = Oasis.JSON.encode_to_iodata!(data)
     send_resp(conn, conn.status || 200, "application/json", response)
   end
 

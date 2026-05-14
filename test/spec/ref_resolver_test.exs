@@ -192,6 +192,54 @@ defmodule Oasis.Spec.RefResolverTest do
     assert RefResolver.resolve_local_ref!(document, "#/special/a~1b/~0value") == 1
   end
 
+  test "detect cyclic local refs" do
+    document = %{
+      "components" => %{
+        "schemas" => %{
+          "A" => %{"$ref" => "#/components/schemas/B"},
+          "B" => %{"$ref" => "#/components/schemas/A"}
+        }
+      }
+    }
+
+    assert_raise Oasis.InvalidSpecError, ~r/Cyclic ref detected/, fn ->
+      RefResolver.expand_local_refs(document)
+    end
+  end
+
+  test "expand refs with nested $id scoped local targets" do
+    document = %{
+      "$id" => "https://example.com/root.json",
+      "$defs" => %{
+        "User" => %{
+          "$id" => "schemas/user.json",
+          "$defs" => %{
+            "Name" => %{"type" => "string"}
+          },
+          "schema" => %{"$ref" => "#/$defs/Name"}
+        }
+      }
+    }
+
+    expanded = RefResolver.expand_local_refs(document)
+
+    assert get_in(expanded, ["$defs", "User", "schema"]) == %{"type" => "string"}
+  end
+
+  test "expand refs keeps absolute $id when source path is a file path" do
+    document = %{
+      "$id" => "https://example.com/root.json",
+      "$defs" => %{
+        "Name" => %{"type" => "string"}
+      },
+      "schema" => %{"$ref" => "#/$defs/Name"}
+    }
+
+    expanded = RefResolver.expand_refs(document, source_path: "/tmp/root.yaml")
+
+    assert expanded["schema"] == %{"type" => "string"}
+  end
+
   test "expand local refs and ignore sibling properties when ref exists" do
     document = %{
       "components" => %{

@@ -1,0 +1,4 @@
+PetList:
+  type: array
+  items:
+    $ref: './pet.yaml#/Pet'
