@@ -1,7 +1,7 @@
-defmodule Oasis.Spec.RefResolverTest do
+defmodule Oasis.Spec.RefExpanderTest do
   use ExUnit.Case
 
-  alias Oasis.Spec.RefResolver
+  alias Oasis.Spec.RefExpander
 
   test "expand nested local refs across schemas parameters and request bodies" do
     yaml_str = """
@@ -60,7 +60,7 @@ defmodule Oasis.Spec.RefResolverTest do
 
     {:ok, document} = YamlElixir.read_from_string(yaml_str)
 
-    expanded = RefResolver.expand_local_refs(document)
+    expanded = RefExpander.expand_local_refs(document)
 
     comp_schemas = get_in(expanded, ["components", "schemas"])
 
@@ -154,7 +154,7 @@ defmodule Oasis.Spec.RefResolverTest do
       }
     }
 
-    expanded = RefResolver.expand_local_refs(document)
+    expanded = RefExpander.expand_local_refs(document)
 
     assert get_in(expanded, ["components", "schemas", "ShortTag"]) == %{
              "type" => "string"
@@ -184,12 +184,12 @@ defmodule Oasis.Spec.RefResolverTest do
       }
     }
 
-    assert RefResolver.resolve_local_ref!(document, "#/components/schemas/Tag") == %{
+    assert RefExpander.resolve_local_ref!(document, "#/components/schemas/Tag") == %{
              "type" => "string"
            }
 
-    assert RefResolver.resolve_local_ref!(document, "#/items/0/name") == "first"
-    assert RefResolver.resolve_local_ref!(document, "#/special/a~1b/~0value") == 1
+    assert RefExpander.resolve_local_ref!(document, "#/items/0/name") == "first"
+    assert RefExpander.resolve_local_ref!(document, "#/special/a~1b/~0value") == 1
   end
 
   test "detect cyclic local refs" do
@@ -203,7 +203,7 @@ defmodule Oasis.Spec.RefResolverTest do
     }
 
     assert_raise Oasis.InvalidSpecError, ~r/Cyclic ref detected/, fn ->
-      RefResolver.expand_local_refs(document)
+      RefExpander.expand_local_refs(document)
     end
   end
 
@@ -221,7 +221,7 @@ defmodule Oasis.Spec.RefResolverTest do
       }
     }
 
-    expanded = RefResolver.expand_local_refs(document)
+    expanded = RefExpander.expand_local_refs(document)
 
     assert get_in(expanded, ["$defs", "User", "schema"]) == %{"type" => "string"}
   end
@@ -235,9 +235,22 @@ defmodule Oasis.Spec.RefResolverTest do
       "schema" => %{"$ref" => "#/$defs/Name"}
     }
 
-    expanded = RefResolver.expand_refs(document, source_path: "/tmp/root.yaml")
+    expanded = RefExpander.expand_refs(document, source_path: "/tmp/root.yaml")
 
     assert expanded["schema"] == %{"type" => "string"}
+  end
+
+  test "missing local ref includes target detail" do
+    document = %{
+      "$id" => "https://example.com/root.json",
+      "schema" => %{"$ref" => "#/$defs/Missing"}
+    }
+
+    assert_raise Oasis.InvalidSpecError,
+                 ~r/Could not resolve ref `#\/\$defs\/Missing` because target `https:\/\/example.com\/root\.json#\/\$defs\/Missing` was not found/,
+                 fn ->
+      RefExpander.expand_local_refs(document)
+    end
   end
 
   test "expand local refs and ignore sibling properties when ref exists" do
@@ -276,7 +289,7 @@ defmodule Oasis.Spec.RefResolverTest do
       }
     }
 
-    expanded = RefResolver.expand_local_refs(document)
+    expanded = RefExpander.expand_local_refs(document)
 
     assert get_in(expanded, ["components", "schemas", "Content", "properties", "tag"]) == %{
              "type" => "string"

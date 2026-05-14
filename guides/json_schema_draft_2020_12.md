@@ -62,6 +62,20 @@ instead of older dependency forms based on:
 
 ## Compatibility notes
 
+### `$ref` preprocessing in Oasis
+
+Before request-validation schemas are compiled, Oasis preprocesses the OpenAPI document and eagerly expands `$ref` values.
+
+Current preprocessing behavior:
+
+- local JSON Pointer refs are expanded
+- relative external refs to local YAML and JSON files are expanded
+- nested `$id` values affect the base URI used for nested schema refs
+- anchors in resolved content are preserved
+- sibling fields next to `$ref` are currently ignored during expansion
+
+This is a preprocessing behavior of Oasis, separate from the runtime validation behavior provided by `jsonschex`.
+
 Oasis still has a parsing/coercion layer that runs before JSON Schema validation.
 
 That parsing layer keeps a small amount of compatibility behavior for some older schema shapes, but those forms should not be treated as the recommended authoring style.

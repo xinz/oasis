@@ -1,0 +1,1 @@
+{"openapi":"3.1.0","info":{"title":"External JSON Ref API","version":"1.0.0"},"paths":{"/json-pets":{"get":{"operationId":"get_json_pet","responses":{"200":{"description":"ok","content":{"application/json":{"schema":{"$ref":"./schemas/json_pet.json#/JsonPet"}}}}}}}}}

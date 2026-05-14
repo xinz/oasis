@@ -3,10 +3,10 @@ defmodule Oasis.Spec.PathTest do
 
   import Oasis.Test.Support.Spec
 
-  alias Oasis.Spec.{Path, RefResolver}
+  alias Oasis.Spec.{Path, RefExpander}
 
   defp expand_refs(%Oasis.Spec.Document{schema: schema} = document) do
-    %{document | schema: RefResolver.expand_local_refs(schema)}
+    %{document | schema: RefExpander.expand_local_refs(schema)}
   end
 
   test "format url" do

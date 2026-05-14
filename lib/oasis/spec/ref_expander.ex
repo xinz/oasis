@@ -1,4 +1,4 @@
-defmodule Oasis.Spec.RefResolver do
+defmodule Oasis.Spec.RefExpander do
   @moduledoc false
 
   alias JSONSchex.Ref
@@ -149,8 +149,8 @@ defmodule Oasis.Spec.RefResolver do
     raise InvalidSpecError, missing_document_message(details)
   end
 
-  defp raise_ref_resolution_error!(%Error{kind: :missing_target}, ref) do
-    raise InvalidSpecError, "Could not resolve ref `#{ref}`"
+  defp raise_ref_resolution_error!(%Error{kind: :missing_target} = error, ref) do
+    raise InvalidSpecError, missing_target_message(error, ref)
   end
 
   defp raise_ref_resolution_error!(%Error{kind: :invalid_ref}, ref) do
@@ -180,6 +180,40 @@ defmodule Oasis.Spec.RefResolver do
 
   defp missing_document_message(details) do
     "Failed to load external ref file: #{inspect(details)}"
+  end
+
+  defp missing_target_message(%Error{target_uri: nil, details: :unknown_local_resource}, ref) do
+    "Could not resolve ref `#{ref}` because the local resource scope could not be determined"
+  end
+
+  defp missing_target_message(%Error{target_uri: target_uri, details: :missing_external_resource}, ref) do
+    "Could not resolve ref `#{ref}` because the external resource `#{resource_uri(target_uri)}` was not available after loading"
+  end
+
+  defp missing_target_message(%Error{target_uri: target_uri, details: detail}, ref)
+       when is_binary(target_uri) and detail in ["not found", :"not found"] do
+    "Could not resolve ref `#{ref}` because target `#{target_uri}` was not found"
+  end
+
+  defp missing_target_message(%Error{target_uri: target_uri, details: detail}, ref)
+       when is_binary(target_uri) and is_binary(detail) do
+    "Could not resolve ref `#{ref}` because target `#{target_uri}` was not found (`#{detail}`)"
+  end
+
+  defp missing_target_message(%Error{target_uri: target_uri, details: detail}, ref)
+       when is_binary(target_uri) do
+    "Could not resolve ref `#{ref}` because target `#{target_uri}` was not found (#{inspect(detail)})"
+  end
+
+  defp missing_target_message(%Error{details: detail}, ref) do
+    "Could not resolve ref `#{ref}` (#{inspect(detail)})"
+  end
+
+  defp resource_uri(target_uri) when is_binary(target_uri) do
+    target_uri
+    |> URI.parse()
+    |> Map.put(:fragment, nil)
+    |> URI.to_string()
   end
 
   defp ensure_acyclic_ref!(ref_key, ref, path, ref_stack) do

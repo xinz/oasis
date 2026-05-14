@@ -92,10 +92,57 @@ defmodule Oasis.Spec.SpecTest do
            }
   end
 
+  test "parse external anchor refs" do
+    file_path = Path.join([@dir, "external", "root_anchor.yaml"])
+    %Oasis.Spec.Document{schema: schema} = Oasis.Spec.read(file_path)
+
+    assert get_in(schema, ["paths", "/pets", "get", "responses", "200", "content", "application/json", "schema"]) == %{
+             "type" => "object",
+             "required" => ["name"],
+             "properties" => %{
+               "name" => %{"type" => "string", "$anchor" => "PetName"},
+               "tag" => %{"type" => "string", "$anchor" => "PetTag"}
+             }
+           }
+  end
+
+  test "parse json root with external json refs" do
+    file_path = Path.join([@dir, "external", "root_json.json"])
+    %Oasis.Spec.Document{schema: schema} = Oasis.Spec.read(file_path)
+
+    assert get_in(schema, ["paths", "/json-pets", "get", "responses", "200", "content", "application/json", "schema"]) == %{
+             "type" => "object",
+             "required" => ["id", "name"],
+             "properties" => %{
+               "id" => %{"type" => "integer"},
+               "name" => %{"type" => "string"}
+             }
+           }
+  end
+
   test "missing external ref file raises invalid spec error" do
     file_path = Path.join([@dir, "external", "missing_file.yaml"])
 
     assert_raise Oasis.InvalidSpecError, ~r/Could not load external ref file/, fn ->
+      Oasis.Spec.read(file_path)
+    end
+  end
+
+  test "missing external ref target raises invalid spec error" do
+    file_path = Path.join([@dir, "external", "missing_target.yaml"])
+
+    assert_raise Oasis.InvalidSpecError,
+                 ~r/Could not resolve ref `\.\/schemas\/pet\.yaml#\/Missing` because target `.*\/schemas\/pet\.yaml#\/Missing` was not found/,
+                 fn ->
+      Oasis.Spec.read(file_path)
+    end
+  end
+
+  test "unsupported external ref format raises invalid spec error" do
+    file_path = Path.join([@dir, "external", "unsupported_ref.yaml"])
+
+    assert_raise Oasis.InvalidSpecError,
+                 ~r/Expect an external ref file be yaml\/yml or json format, but got: `\.txt`/, fn ->
       Oasis.Spec.read(file_path)
     end
   end

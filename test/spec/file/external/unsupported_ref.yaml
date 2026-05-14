@@ -1,0 +1,15 @@
+openapi: 3.1.0
+info:
+  title: Unsupported External Ref API
+  version: 1.0.0
+paths:
+  /pets:
+    get:
+      operationId: get_pets
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/raw.txt#/Pet'

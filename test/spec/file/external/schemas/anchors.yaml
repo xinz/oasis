@@ -1,0 +1,16 @@
+$defs:
+  PetName:
+    $anchor: PetName
+    type: string
+  PetTag:
+    $anchor: PetTag
+    type: string
+PetSummary:
+  type: object
+  required:
+    - name
+  properties:
+    name:
+      $ref: '#PetName'
+    tag:
+      $ref: '#PetTag'

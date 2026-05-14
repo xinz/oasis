@@ -166,7 +166,22 @@ Generates Router and Plug modules from OAS
 
 The generated `pre_*` modules compile nested JSON Schemas at module compile time with `JSONSchex.Schema.compile!/2`, so request validation works with compiled `JSONSchex.Types.Schema` values at runtime. In concise handwritten examples and tests, Oasis may also use `~X` when it is the clearest static schema form.
 
-Generated routers and helpers use `Oasis.JSON` as the JSON encoder/decoder module. `Oasis.JSON` is the stable Oasis-owned wrapper for JSON operations and delegates to JSON in Elixir v1.18+ or Jason for earlier versions
+Generated routers and helpers use `Oasis.JSON` as the JSON encoder/decoder module. `Oasis.JSON` is the stable Oasis-owned wrapper for JSON operations and delegates to JSON in Elixir v1.18+ or Jason for earlier versions.
+
+### Current `$ref` expansion behavior
+
+When Oasis reads an OpenAPI document, it eagerly expands `$ref` values before path processing and router generation.
+
+Current behavior:
+
+- local JSON Pointer refs such as `#/components/schemas/User` are expanded
+- relative external refs to local YAML and JSON files are expanded
+- nested `$id` values are used as the base URI while expanding nested schemas
+- anchors inside resolved content are preserved in the expanded result
+- sibling fields next to `$ref` are currently ignored during expansion
+- unsupported external ref formats raise an `Oasis.InvalidSpecError`
+
+Oasis currently focuses on local-document and local-file `$ref` expansion for preprocessing. It does not currently advertise support for arbitrary remote network ref loading in this layer.
 
 The `oas.gen.plug` mix task accepts these arguments:
 

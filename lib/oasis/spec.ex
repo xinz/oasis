@@ -4,7 +4,7 @@ defmodule Oasis.Spec do
   require Logger
 
   alias __MODULE__
-  alias __MODULE__.{Document, RefResolver}
+  alias __MODULE__.{Document, RefExpander}
 
   def read(path) do
     path
@@ -28,7 +28,7 @@ defmodule Oasis.Spec do
   end
 
   defp expand_refs(%Document{schema: schema, source_path: source_path} = document) do
-    %{document | schema: RefResolver.expand_refs(schema, source_path: source_path)}
+    %{document | schema: RefExpander.expand_refs(schema, source_path: source_path)}
   end
 
 end
