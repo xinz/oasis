@@ -81,13 +81,13 @@ defmodule Oasis.Plug.HMACAuth do
     - HMACAuth: []
   ```
 
-  The above arbitrary name `"HMACAuth"` for the security scheme will be transferred into a generated module (see the above mentioned "Oasis.Gen.HMACAuth"
-  module) to provide the required crypto-related configuration, and use it as the value to the `:security` option of `hmac_auth/2`.
+  The arbitrary security scheme name `"HMACAuth"` is transformed into a generated module (for example `Oasis.Gen.HMACAuth`)
+  that provides the required crypto-related configuration, and that module is then used as the value of the `:security` option for `hmac_auth/2`.
 
-  By default, the generated `"HMACAuth"` module will inherit the module name space in order from the paths object, and then the operation object if they defined
-  an `x-oasis-name-space` field, or defaults to `Oasis.Gen` if there are no any specification defined. As an option, we can add an `x-oasis-name-space`
-  field as a specification extension of the security scheme object to override the generated module's name space, meanwhile, the optional `--name-space` argument to the
-  `mix oas.gen.plug` command line is in the highest priority to set the name space of the all generated modules.
+  By default, the generated `HMACAuth` module inherits its namespace from the Paths Object and then the Operation Object if they define
+  an `x-oasis-name-space` field, and otherwise falls back to `Oasis.Gen`. You can also define `x-oasis-name-space`
+  in the Security Scheme Object to override the generated module namespace. The optional `--name-space` argument to
+  `mix oas.gen.plug` has the highest priority and overrides namespaces defined in the specification.
 
   ```yaml
   components:
@@ -101,12 +101,11 @@ defmodule Oasis.Plug.HMACAuth do
 
   In the above example, the final generated module name of `"HMACAuth"` is `"MyAuth.HMACAuth"` when there is no `--name-space` argument of mix task input.
 
-  After we define the HMAC authentication into the specification, then run `mix oas.gen.plug` task with this spec file (via `--file` argument), there will
-  generate the above similar code to the related module file as long as it does not exist, it also follows the name space definition
-  to that module, and the generation does not override it once the file existed, we need to further edit this file to provide a crypto-related
-  configuration in your preferred way.
+  After you define HMAC authentication in the specification and run `mix oas.gen.plug --file ...`, Oasis generates a related module file if it does not
+  already exist. The generated file follows the configured namespace and is not overwritten after it has been created, so you can edit it to provide your
+  preferred crypto-related configuration.
 
-  If we need a customization to verify the HMAC token, we can implement a callback function `c:Oasis.HMACToken.verify/3` to this scenario.
+  If you need custom HMAC-token verification logic, implement the `c:Oasis.HMACToken.verify/3` callback.
 
       # lib/hmac_auth.ex
       defmodule HMACAuth do

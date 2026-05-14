@@ -75,11 +75,11 @@ defmodule Oasis.Token do
           | {:error, :invalid}
 
   @doc """
-  Avoid using the application enviroment as the configuration mechanism for this library,
-  and make crypto-related key information configurable when use bearer authentication.
+  Avoid using the application environment as the configuration mechanism for this library,
+  and make crypto-related key information configurable when using bearer authentication.
 
-  The `Oasis.Plug.BearerAuth` module invokes this callback function to fetch a predefined
-  `#{inspect(__MODULE__)}.Crypto` struct, and then use it to verify the bearer token of the request.
+  The `Oasis.Plug.BearerAuth` module invokes this callback to fetch a predefined
+  `#{inspect(__MODULE__)}.Crypto` struct, and then uses it to verify the bearer token in the request.
   """
   @callback crypto_config(conn :: Plug.Conn.t(), opts :: Keyword.t()) :: Crypto.t()
 

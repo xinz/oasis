@@ -2,9 +2,9 @@
 
 Oasis provides the following [specification extensions](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md#specificationExtensions) to support additional use cases in an OpenAPI `3.1.0` YAML or JSON specification file.
 
-## Module Name Space
+## Module Namespace
 
-`"x-oasis-name-space"`, optional, use this field to define the generated Elixir module's name space in the following objects, defaults to `Oasis.Gen`:
+`"x-oasis-name-space"`, optional. Use this field to define the generated Elixir module namespace in the following objects. It defaults to `Oasis.Gen`:
   * [Paths Object](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md#pathsObject)
   * [Operation Object](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md#operationObject)
   * [Security Scheme Object](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md#securitySchemeObject)
@@ -17,7 +17,7 @@ Here, defining this field in the [Paths Object](https://github.com/OAI/OpenAPI-S
 sets a global namespace for all generated modules when there are no more specific overrides. In the example below,
 all generated modules use `Hello.Petstore` as the module prefix.
 
-```YAML
+```yaml
 paths:
   /pets:
     get:
@@ -36,7 +36,7 @@ Here, defining this field in the [Operation Object](https://github.com/OAI/OpenA
 affects only the generated modules related to that operation when there are no more specific overrides. In the example below,
 the modules generated for handling `GET /pets` use `Petstore.Api`, while other generated modules still use the default `Oasis.Gen` namespace.
 
-```YAML
+```yaml
 paths:
   /pets:
     get:
@@ -56,7 +56,7 @@ Here, defining this field in the [Security Scheme Object](https://github.com/OAI
 affects only the generated bearer token module when there are no more specific overrides. In the example below,
 `helloBearerAuth` becomes `Petstore.MyToken.HelloBearerAuth`.
 
-```YAML
+```yaml
 paths:
   /pets:
     get:
@@ -81,7 +81,7 @@ Follow normal Elixir module naming conventions. Each dot (`.`) in a module name 
 
 ## Router Module Alias
 
-`"x-oasis-router"`, optional, use this field to define the generated Elixir router module's alias in [Paths Object](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md#pathsObject), defaults to `Router`.
+`"x-oasis-router"`, optional. Use this field to define the generated Elixir router module alias in the [Paths Object](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md#pathsObject). It defaults to `Router`.
 
 ### Example
 
@@ -89,7 +89,7 @@ When you run `mix oas.gen.plug` with an OpenAPI specification, Oasis generates a
 The router file wires the defined HTTP routes to each handler. You can customize the router module name with `"x-oasis-router"` and `"x-oasis-name-space"` in the specification file.
 Without another namespace override, the following example produces the router module `Oasis.Gen.HelloRouter`.
 
-```YAML
+```yaml
 paths:
   /pets:
     ..
@@ -112,7 +112,7 @@ Follow normal Elixir module naming conventions. Each dot (`.`) in a module name 
 
 Once the input token is verified, you can access the original token data (decrypted from the token) through `conn.assigns.user_id` later in the Plug pipeline.
 
-```YAML
+```yaml
 openapi: 3.1.0
 
 components:

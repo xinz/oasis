@@ -1,11 +1,11 @@
 defmodule Oasis.Router do
   @moduledoc ~S"""
-  Base on `Plug.Router` to add a pre-parser to convert and validate the path param(s) in the
-  final generated HTTP verb match functions.
+  Based on `Plug.Router`, this module adds a pre-parser that converts and validates path parameters
+  in the final generated HTTP verb match functions.
 
-  The generated router module uses `Oasis.Router` to instead of `Plug.Router`, in fact, they don't make a
-  huge difference, except that specify parameters which will then be available and types coverted
-  in the function body:
+  The generated router module uses `Oasis.Router` instead of `Plug.Router`. The difference is small,
+  but Oasis can pre-parse path parameters so the converted values are available directly in the
+  function body:
 
       use JSONSchex
 
@@ -21,7 +21,7 @@ defmodule Oasis.Router do
         send_resp(conn, 200, "hello #{id}")
       end
 
-  The `:id` parameter will also be available and coverted as an integer in the function body as
+  The `:id` parameter will also be available as an integer through
   `conn.params["id"]` and `conn.path_params["id"]`.
   """
 

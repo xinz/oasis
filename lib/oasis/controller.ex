@@ -1,6 +1,6 @@
 defmodule Oasis.Controller do
   @moduledoc ~S"""
-  Base on `Plug.Builder`, this module can be `use`-d into a module in order to build a plug pipeline:
+  Based on `Plug.Builder`, this module can be `use`-d in another module to build a plug pipeline:
 
       defmodule MyApp.HelloController do
         use Oasis.Controller
@@ -16,7 +16,7 @@ defmodule Oasis.Controller do
         end
       end
 
-  And provide some common functionality for easily use, this realization comes from
+  It also provides some common helper functions for convenience. This implementation is inspired by
   [Phoenix.Controller](https://hexdocs.pm/phoenix/Phoenix.Controller.html).
   """
   import Plug.Conn

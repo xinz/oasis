@@ -2,24 +2,24 @@ defmodule Oasis do
   @moduledoc false
 
   defmodule InvalidSpecError do
-    defexception message: "use some invalid specification to generate modules"
+    defexception message: "used an invalid specification while generating modules"
 
     @moduledoc """
-    Error raised when use some invalid OpenAPI specification to generate corresponding modules.
+    Error raised when an invalid OpenAPI specification is used to generate modules.
     """
   end
 
   defmodule FileNotFoundError do
-    defexception message: "failed to open file to generate modules"
+    defexception message: "failed to open file while generating modules"
 
     @moduledoc """
-    Error raised when use an invalid file path to generate corresponding modules.
+    Error raised when an invalid file path is used to generate modules.
     """
   end
 
   defmodule BadRequestError do
     @moduledoc """
-    Error raised when some reason could not process the request due to client error.
+    Error raised when a request cannot be processed because of client input.
     """
     defexception message: "invalid request",
                  use_in: nil,
@@ -29,21 +29,21 @@ defmodule Oasis do
 
     defmodule Invalid do
       @moduledoc """
-      This error is used to indicate could not parse a parameter into the type due to client error.
+      Indicates that a parameter could not be parsed into the expected type because of client input.
       """
       defstruct [:value]
     end
 
     defmodule Required do
       @moduledoc """
-      This error is used to indicate there missing a required parameter due to client error.
+      Indicates that a required parameter is missing because of client input.
       """
       defstruct([])
     end
 
     defmodule JsonSchemaValidationFailed do
       @moduledoc """
-      This error is used to indicate could not pass the validation of the defined json schema.
+      Indicates that input did not pass validation against the configured JSON Schema.
 
       The `:error` field contains a `JSONSchex.Types.Error` value from the configured JSON Schema
       validator.
@@ -53,7 +53,7 @@ defmodule Oasis do
 
     defmodule InvalidToken do
       @moduledoc """
-      This error is used to indicate the provided token is expired, revoked, malformed, or invalid.
+      Indicates that the provided token is expired, revoked, malformed, or otherwise invalid.
       """
       defstruct([])
     end

@@ -2,19 +2,19 @@ defmodule Mix.Tasks.Oas.Gen.Plug do
   @shortdoc "Generates Router and Plug modules from OpenAPI Specification"
 
   @moduledoc """
-  Generates router and plug handlers for a proper OpenAPI Specification in YAML or JSON file.
+  Generates router and plug handlers from an OpenAPI specification in a YAML or JSON file.
 
       mix oas.gen.plug --file path/to/openapi.yaml
       mix oas.gen.plug --file path/to/openapi.yml
       mix oas.gen.plug --file path/to/openapi.json
 
-  The arguments of `oas.gen.plug` mix task:
+  The `oas.gen.plug` mix task accepts these arguments:
 
-  * `--file`, required, the completed path to the specification file in YAML or JSON format.
-  * `--router`, optional, the generated router's module alias, by default it is `Router` (the full module name is `Oasis.Gen.Router` by default), for example we set `--router Hello.MyRouter` meanwhile there is no other special name space defined, the final router module is `Oasis.Gen.Hello.MyRouter` in `/lib/oasis/gen/hello/my_router.ex` path.
-  * `--name-space`, optional, the generated all modules' name space, by default it is `Oasis.Gen`, this argument will always override the name space from the input `--file` if any `"x-oasis-name-space"` field(s) defined.
-  * `--force`, optional, forces creation without a shell prompt.
-  * `--quiet`, optional, does not log command output.
+  * `--file`, required. The full path to the specification file in YAML or JSON format.
+  * `--router`, optional. The generated router module alias. The default is `Router`, which produces `Oasis.Gen.Router` by default. For example, if you pass `--router Hello.MyRouter` and do not define another namespace, the final router module becomes `Oasis.Gen.Hello.MyRouter` in `/lib/oasis/gen/hello/my_router.ex`.
+  * `--name-space`, optional. The namespace for all generated modules. The default is `Oasis.Gen`. This argument always overrides any `"x-oasis-name-space"` fields defined in the specification file.
+  * `--force`, optional. Forces creation without a shell prompt.
+  * `--quiet`, optional. Does not log command output.
   """
   use Mix.Task
 
