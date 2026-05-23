@@ -1,37 +1,34 @@
 defmodule Oasis.Gen.Plug.PreTestQuery do
-  use Oasis.Controller
+    use Oasis.Controller
   use Plug.ErrorHandler
 
-  plug(
-    Oasis.Plug.RequestValidator,
+  plug(Oasis.Plug.RequestValidator,
     query_schema: %{
       "profile" => %{
         "content" => %{
           "application/json" => %{
-            "schema" => %ExJsonSchema.Schema.Root{
-              schema: %{
-                "properties" => %{
-                  "name" => %{"type" => "string"},
-                  "tag" => %{"type" => "integer"}
-                },
-                "required" => ["name", "tag"],
-                "type" => "object"
-              }
-            }
+            "schema" =>
+              Oasis.Test.JSONSchema.compile!(
+                %{
+                  "properties" => %{
+                    "name" => %{"type" => "string"},
+                    "tag" => %{"type" => "integer"}
+                  },
+                  "required" => ["name", "tag"],
+                  "type" => "object"
+                })
           }
         },
         "required" => false
       },
       "lang" => %{
-        "schema" => %ExJsonSchema.Schema.Root{
-          schema: %{"type" => "integer", "minimum" => 10, "maximum" => 20}
-        },
+        "schema" =>
+          Oasis.Test.JSONSchema.compile!(%{"type" => "integer", "minimum" => 10, "maximum" => 20}),
         "required" => true
       },
       "all" => %{
-        "schema" => %ExJsonSchema.Schema.Root{
-          schema: %{"type" => "boolean"}
-        },
+        "schema" =>
+          Oasis.Test.JSONSchema.compile!(%{"type" => "boolean"}),
         "required" => false
       }
     }
@@ -42,5 +39,4 @@ defmodule Oasis.Gen.Plug.PreTestQuery do
   end
 
   defdelegate handle_errors(conn, error), to: Oasis.Gen.Plug.TestQuery
-
 end

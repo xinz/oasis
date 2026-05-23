@@ -1,29 +1,18 @@
 defmodule Oasis.Gen.Plug.PreTestDelete do
-  use Oasis.Controller
+    use Oasis.Controller
   use Plug.ErrorHandler
+  plug(Plug.Parsers, parsers: [:urlencoded], pass: ["*/*"])
 
-  plug(
-    Plug.Parsers,
-    parsers: [:urlencoded],
-    pass: ["*/*"]
-  )
-
-  plug(
-    Oasis.Plug.RequestValidator,
+  plug(Oasis.Plug.RequestValidator,
     query_schema: %{
       "relation_ids" => %{
-        "schema" => %ExJsonSchema.Schema.Root{
-          schema: %{
-            "type" => "array",
-            "items" => %{"type" => "string"}
-          }
-        },
+        "schema" =>
+          Oasis.Test.JSONSchema.compile!(%{"type" => "array", "items" => %{"type" => "string"}}),
         "required" => false
       },
       "id" => %{
-        "schema" => %ExJsonSchema.Schema.Root{
-          schema: %{"type" => "integer"}
-        },
+        "schema" =>
+          Oasis.Test.JSONSchema.compile!(%{"type" => "integer"}),
         "required" => true
       }
     }
@@ -34,5 +23,4 @@ defmodule Oasis.Gen.Plug.PreTestDelete do
   end
 
   defdelegate handle_errors(conn, error), to: Oasis.Gen.Plug.TestDelete
-
 end

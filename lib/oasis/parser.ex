@@ -60,6 +60,20 @@ defmodule Oasis.Parser do
     end)
   end
 
+  defp do_parse_array(%{"prefixItems" => items}, list)
+       when is_list(items) and length(items) <= length(list) do
+    parsed_prefix =
+      items
+      |> Enum.zip(list)
+      |> Enum.map(fn {type, value} ->
+        parse(type, value)
+      end)
+
+    parsed_rest = Enum.drop(list, length(items))
+
+    parsed_prefix ++ parsed_rest
+  end
+
   defp do_parse_array(%{"items" => items}, list)
        when is_list(items) and length(items) == length(list) do
     items
@@ -115,7 +129,7 @@ defmodule Oasis.Parser do
 
   defp properties_from_schema_dependencies(type) do
     type
-    |> Map.get("dependencies", %{})
+    |> Map.get("dependencies", Map.get(type, "dependentSchemas", %{}))
     |> Enum.reduce(%{}, fn
       {_name, definition}, acc when is_map(definition) ->
         # schema dependencies

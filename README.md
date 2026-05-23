@@ -170,6 +170,22 @@ The arguments of `oas.gen.plug` mix task:
 * `--router`, optional, the generated router's module alias, by default it is `Router` (the full module name is `Oasis.Gen.Router` by default), for example we set `--router Hello.MyRouter` meanwhile there is no other special name space defined, the final router module is `Oasis.Gen.Hello.MyRouter` in `/lib/oasis/gen/hello/my_router.ex` path.
 * `--name-space`, optional, the generated all modules' name space, by default it is `Oasis.Gen`, this argument will always override the name space from the input `--file` if any `"x-oasis-name-space"` field(s) defined.
 
+### JSON Schema and `$ref` handling
+
+Oasis uses `jsonschex` for JSON Schema Draft 2020-12 compilation and validation.
+Generated validators embed schemas with `JSONSchex.Schema.compile!/2`.
+
+Oasis distinguishes OpenAPI Reference Objects from JSON Schema `$ref` keywords:
+
+* OpenAPI Reference Objects needed for generation, such as Path Item, Parameter, Request Body, and Response refs, are resolved before router generation.
+* Schema Object `$ref` values are preserved and resolved by `jsonschex` through `JSONSchex.bundle_fragment/2` / `JSONSchex.compile_fragment/2`.
+
+This means external shared schema files and recursive schemas are handled by `jsonschex`, while Oasis keeps OpenAPI-specific traversal and code generation local to Oasis.
+
+Library callers can pass a custom JSONSchex-compatible `:loader` through Oasis generation options when they need non-default file lookup or in-memory resources. The mix task keeps the default local YAML/JSON loader and does not expose custom loader configuration.
+
+Generated schema definitions include Oasis source metadata, so validation failures can retain the OpenAPI entry pointer and operation context for custom error handlers. Oasis also compacts bundled standalone schemas by keeping known JSON Schema document keywords plus the OpenAPI `components` context needed by preserved component refs.
+
 ### Special instructions
 
 #### Name Plug's handler

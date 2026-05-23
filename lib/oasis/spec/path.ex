@@ -35,7 +35,7 @@ defmodule Oasis.Spec.Path do
 
   def supported_http_verbs(), do: @supported_http_verbs
 
-  def build(%{schema: schema} = root) do
+  def build(%Oasis.Spec.Document{schema: schema} = root) do
     paths = schema["paths"] || %{}
 
     paths =
@@ -50,6 +50,12 @@ defmodule Oasis.Spec.Path do
     schema = Map.put(schema, "paths", paths)
 
     %{root | schema: schema}
+  end
+
+  def build(schema) when is_map(schema) do
+    schema
+    |> Oasis.Spec.Document.new()
+    |> build()
   end
 
   defp map_path({path_expr, info}) do

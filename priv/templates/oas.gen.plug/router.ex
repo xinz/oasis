@@ -1,6 +1,7 @@
 defmodule <%= inspect context.module_name %> do
   # NOTICE: This module is generated when run `mix oas.gen.plug` task command with the OpenAPI Specification file.
   use Oasis.Router
+  require JSONSchex.Schema
 
   plug(:match)
   plug(:dispatch)
@@ -8,7 +9,7 @@ defmodule <%= inspect context.module_name %> do
   <%= router.http_verb %>(
     <%= inspect router.url %>,
     <%= if router.path_schema != nil do %>private: %{
-      path_schema: <%= inspect router.path_schema %>
+      path_schema: <%= Mix.Oasis.render_embedded_schemas(router.path_schema) %>
     },
     <% end %>to: <%= inspect router.pre_plug_module %>
   )

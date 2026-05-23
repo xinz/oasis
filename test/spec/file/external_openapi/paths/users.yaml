@@ -1,0 +1,4 @@
+UserCollection:
+  post:
+    requestBody:
+      $ref: '../shared/request_bodies.yaml#/components/requestBodies/CreateUser'

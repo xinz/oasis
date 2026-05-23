@@ -1,86 +1,79 @@
 defmodule Oasis.RouterTest do
+  
   defmodule Sample do
-    use Oasis.Router
-
+        use Oasis.Router
     plug(:match)
-
     plug(:dispatch)
 
-    get "/1/:bar" do
+    get("/1/:bar") do
       resp(conn, 200, inspect(bar))
     end
 
-    match "/foo/:bar",
+    match("/foo/:bar",
       via: [:get],
       private: %{
         path_schema: %{
           "id" => %{
-            "schema" => %ExJsonSchema.Schema.Root{
-              schema: %{"type" => "integer"}
-            }
+            "schema" => Oasis.Test.JSONSchema.compile!(%{"type" => "integer"})
           }
         }
-      } do
+      }
+    ) do
       resp(conn, 200, Jason.encode!(%{bar: bar}))
     end
 
-    head "/head" do
+    head("/head") do
       resp(conn, 200, "")
     end
 
-    patch "/patch" do
+    patch("/patch") do
       resp(conn, 200, "")
     end
 
-    options "/options" do
+    options("/options") do
       resp(conn, 200, "")
     end
 
-    put "/put" do
+    put("/put") do
       resp(conn, 200, "")
     end
 
-    get "/get/:id",
+    get("/get/:id",
       private: %{
         path_schema: %{
           "id" => %{
-            "schema" => %ExJsonSchema.Schema.Root{
-              schema: %{"type" => "integer"}
-            }
+            "schema" => Oasis.Test.JSONSchema.compile!(%{"type" => "integer"})
           }
         }
-      } do
+      }
+    ) do
       resp(conn, 200, Jason.encode!(%{id: id}))
     end
 
-    post "/post/:page_id",
+    post("/post/:page_id",
       private: %{
         path_schema: %{
           "page_id" => %{
-            "schema" => %ExJsonSchema.Schema.Root{
-              schema: %{"type" => "integer"}
-            }
+            "schema" => Oasis.Test.JSONSchema.compile!(%{"type" => "integer"})
           }
         }
-      } do
+      }
+    ) do
       resp(conn, 200, Jason.encode!(%{page_id: page_id}))
     end
 
-    delete "/delete/:user_id/:group_id",
+    delete("/delete/:user_id/:group_id",
       private: %{
         path_schema: %{
           "user_id" => %{
-            "schema" => %ExJsonSchema.Schema.Root{
-              schema: %{"type" => "integer"}
-            }
+            "schema" => Oasis.Test.JSONSchema.compile!(%{"type" => "integer"})
           },
           "group_id" => %{
-            "schema" => %ExJsonSchema.Schema.Root{
-              schema: %{"type" => "string"}
-            }
+            "schema" => Oasis.Test.JSONSchema.compile!(%{"type" => "string"})
           }
         }
-      } do
+      }
+    ) do
       resp(conn, 200, Jason.encode!(%{user_id: user_id, group_id: group_id}))
     end
 
@@ -88,7 +81,6 @@ defmodule Oasis.RouterTest do
       message = Map.get(reason, :message) || "Something went wrong"
       send_resp(conn, conn.status, message)
     end
-
   end
 
   use ExUnit.Case, async: true
@@ -152,15 +144,16 @@ defmodule Oasis.RouterTest do
 
   test "handler_errors/2 in generated plug module" do
     conn = conn(:get, "/test_header")
-    assert_raise Plug.Conn.WrapperError, ~s/** (Oasis.BadRequestError) Missing a required parameter/, fn ->
-      call(Oasis.HTTPServer.PlugRouter, conn)
-    end
+
+    assert_raise Plug.Conn.WrapperError,
+                 ~s/** (Oasis.BadRequestError) Missing a required parameter/,
+                 fn -> call(Oasis.HTTPServer.PlugRouter, conn) end
 
     conn = put_req_header(conn, "items", "[1,2,3]")
     conn = call(Oasis.HTTPServer.PlugRouter, conn)
     assert conn.req_headers == [{"items", [1, 2, 3]}]
-
     conn = conn(:get, "/test_header?raise=true") |> put_req_header("items", "[0]")
+
     assert_raise Plug.Conn.WrapperError, "** (RuntimeError) oops", fn ->
       call(Oasis.HTTPServer.PlugRouter, conn)
     end

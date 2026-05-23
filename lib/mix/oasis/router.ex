@@ -111,6 +111,8 @@ defmodule Mix.Oasis.Router do
   end
 
   defp new(apps, url, http_verb, operation, opts) do
+    opts = Keyword.put(opts, :operation_pointer_path, ["paths", url, http_verb])
+
     router =
       Map.merge(
         %__MODULE__{
@@ -125,19 +127,19 @@ defmodule Mix.Oasis.Router do
 
   defp build_operation(operation, opts) do
     operation
-    |> merge_parameters_to_operation()
-    |> merge_request_body_to_operation()
+    |> merge_parameters_to_operation(opts)
+    |> merge_request_body_to_operation(opts)
     |> merge_security_to_operation(opts)
     |> merge_others_to_operation(opts)
   end
 
-  defp merge_parameters_to_operation(%{"parameters" => parameters} = operation) do
+  defp merge_parameters_to_operation(%{"parameters" => parameters} = operation, opts) do
     router =
       @check_parameter_fields
       |> Enum.reduce(%{}, fn location, acc ->
         parameters_to_location = Map.get(parameters, location)
 
-        params_to_schema = group_schemas_by_location(location, parameters_to_location)
+        params_to_schema = group_schemas_by_location(location, parameters_to_location, opts)
 
         to_schema_opt(params_to_schema, location, acc)
       end)
@@ -145,10 +147,11 @@ defmodule Mix.Oasis.Router do
     {router, operation}
   end
 
-  defp merge_parameters_to_operation(operation), do: {%{}, operation}
+  defp merge_parameters_to_operation(operation, _opts), do: {%{}, operation}
 
   defp merge_request_body_to_operation(
-         {acc, %{"requestBody" => %{"content" => content} = request_body} = operation}
+         {acc, %{"requestBody" => %{"content" => content} = request_body} = operation},
+         opts
        )
        when is_map(content) do
     content =
@@ -156,7 +159,14 @@ defmodule Mix.Oasis.Router do
         schema = Map.get(media, "schema")
 
         if schema != nil do
-          media = Map.put(media, "schema", %ExJsonSchema.Schema.Root{schema: schema})
+          entry_pointer = entry_pointer(opts, ["requestBody", "content", content_type, "schema"])
+          source = source_metadata(opts, entry_pointer, content_type: content_type)
+
+          media =
+            media
+            |> Map.put("schema", Mix.Oasis.prepare_json_schema!(schema, schema_opts(opts, entry_pointer)))
+            |> Map.put("x-oasis-source", source)
+
           Map.put(acc, content_type, media)
         else
           acc
@@ -176,7 +186,7 @@ defmodule Mix.Oasis.Router do
     end
   end
 
-  defp merge_request_body_to_operation({acc, operation}), do: {acc, operation}
+  defp merge_request_body_to_operation({acc, operation}, _opts), do: {acc, operation}
 
   defp put_required_if_exists(%{"required" => required}, map)
        when is_boolean(required) and is_map(map) do
@@ -185,23 +195,30 @@ defmodule Mix.Oasis.Router do
 
   defp put_required_if_exists(_, map), do: map
 
-  defp group_schemas_by_location(location, parameters)
+  defp group_schemas_by_location(location, parameters, opts)
        when location in @check_parameter_fields and is_list(parameters) do
-    Enum.reduce(parameters, %{}, fn param, acc ->
-      map_parameter(param, acc)
+    parameters
+    |> Enum.with_index()
+    |> Enum.reduce(%{}, fn {param, index}, acc ->
+      map_parameter(param, location, index, acc, opts)
     end)
   end
 
-  defp group_schemas_by_location(_location, _parameters), do: nil
+  defp group_schemas_by_location(_location, _parameters, _opts), do: nil
 
-  defp map_parameter(%{"name" => name, "schema" => schema} = parameter, acc) do
+  defp map_parameter(%{"name" => name, "schema" => schema} = parameter, location, index, acc, opts) do
+    entry_pointer = entry_pointer(opts, ["parameters", location, index, "schema"])
+
     parameter =
-      put_required_if_exists(parameter, %{"schema" => %ExJsonSchema.Schema.Root{schema: schema}})
+      put_required_if_exists(parameter, %{
+        "schema" => Mix.Oasis.prepare_json_schema!(schema, schema_opts(opts, entry_pointer)),
+        "x-oasis-source" => source_metadata(opts, entry_pointer, parameter_location: location, parameter_name: name)
+      })
 
     Map.merge(acc, %{name => parameter})
   end
 
-  defp map_parameter(_, acc), do: acc
+  defp map_parameter(_, _location, _index, acc, _opts), do: acc
 
   defp to_schema_opt(nil, _, acc), do: acc
 
@@ -223,6 +240,43 @@ defmodule Mix.Oasis.Router do
 
   defp to_schema_opt(params, "path", acc) do
     Map.put(acc, :path_schema, params)
+  end
+
+  defp schema_opts(opts, entry_pointer) do
+    opts
+    |> Keyword.take([:root_spec, :base_uri, :loader])
+    |> Keyword.put(:entry_pointer, entry_pointer)
+  end
+
+  defp source_metadata(opts, entry_pointer, extra) do
+    opts
+    |> Keyword.fetch!(:operation_pointer_path)
+    |> then(fn ["paths", url, http_verb] ->
+      %{
+        entry_pointer: entry_pointer,
+        path: url,
+        http_verb: http_verb
+      }
+    end)
+    |> Map.merge(Map.new(extra))
+  end
+
+  defp entry_pointer(opts, relative_path) do
+    opts
+    |> Keyword.fetch!(:operation_pointer_path)
+    |> Kernel.++(relative_path)
+    |> pointer_from_path()
+  end
+
+  defp pointer_from_path(path) do
+    "#" <> Enum.map_join(path, "", fn segment -> "/" <> encode_pointer_segment(segment) end)
+  end
+
+  defp encode_pointer_segment(segment) do
+    segment
+    |> to_string()
+    |> String.replace("~", "~0")
+    |> String.replace("/", "~1")
   end
 
   defp merge_security_to_operation({acc, operation}, opts) do

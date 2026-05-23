@@ -11,9 +11,7 @@ defmodule Oasis.Router do
         private: %{
           path_schema: %{
             "id" => %{
-              "schema" => %ExJsonSchema.Schema.Root{
-                schema: %{"type" => "integer"}
-              }
+              "schema" => JSONSchex.Schema.compile!(%{"type" => "integer"})
             }
           }
         }) do

@@ -1,15 +1,13 @@
 defmodule Oasis.Gen.Plug.PreTestCookie do
-  use Oasis.Controller
+    use Oasis.Controller
   use Plug.ErrorHandler
 
-  plug(
-    Oasis.Plug.RequestValidator,
+  plug(Oasis.Plug.RequestValidator,
     cookie_schema: %{
       "items" => %{
         "required" => true,
-        "schema" => %ExJsonSchema.Schema.Root{
-          schema: %{"items" => %{"type" => "number"}, "type" => "array"}
-        }
+        "schema" =>
+          Oasis.Test.JSONSchema.compile!(%{"items" => %{"type" => "number"}, "type" => "array"})
       }
     }
   )
@@ -19,5 +17,4 @@ defmodule Oasis.Gen.Plug.PreTestCookie do
   end
 
   defdelegate handle_errors(conn, error), to: Oasis.Gen.Plug.TestCookie
-
 end

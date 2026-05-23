@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+* Replace `ex_json_schema` with `jsonschex` for JSON Schema Draft 2020-12 compilation and validation.
+* Generate schemas with `JSONSchex.Schema.compile!/2` and prepare schema fragments through `JSONSchex.bundle_fragment/2`.
+* Resolve OpenAPI Reference Objects with `JSONSchex.Ref.resolve_selected/2` while preserving Schema Object `$ref`s for JSONSchex.
+* Add support coverage for external OpenAPI refs, external JSON Schema refs, recursive schemas, custom loaders, and schema diagnostics in generation.
+* Attach Oasis source metadata to JSON Schema validation failures and compact generated bundled schemas by keeping known schema document keys.
+
 ## v0.6.0 (2026-01-29)
 
 * Fix compile fail `inspect_as_struct` in Elixir 1.19

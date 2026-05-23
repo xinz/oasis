@@ -5,7 +5,7 @@ defmodule Oasis.Spec.SpecTest do
 
   test "parse basic info from yaml and json" do
     file_path = Path.join([@dir, "basic.yaml"])
-    %ExJsonSchema.Schema.Root{schema: schema} = Oasis.Spec.read(file_path)
+    %Oasis.Spec.Document{schema: schema} = Oasis.Spec.read(file_path)
 
     assert schema["openapi"] == "3.1.0"
 
@@ -16,7 +16,7 @@ defmodule Oasis.Spec.SpecTest do
     assert length(schema["servers"]) == 3
 
     file_path = Path.join([@dir, "basic.json"])
-    %ExJsonSchema.Schema.Root{schema: schema_from_json} = Oasis.Spec.read(file_path)
+    %Oasis.Spec.Document{schema: schema_from_json} = Oasis.Spec.read(file_path)
 
     assert schema_from_json == schema
   end
@@ -50,16 +50,23 @@ defmodule Oasis.Spec.SpecTest do
 
   test "parse post requestBodies" do
     file_path = Path.join([@dir, "basic.yaml"])
-    %ExJsonSchema.Schema.Root{schema: schema} = Oasis.Spec.read(file_path)
+    %Oasis.Spec.Document{schema: schema} = Oasis.Spec.read(file_path)
 
     request_body_of_refresh_token = schema["paths"]["/refresh_token"]["post"]["requestBody"]
     assert request_body_of_refresh_token["required"] == true
 
-    schema = request_body_of_refresh_token["content"]["application/json"]["schema"]
-    schema = ExJsonSchema.Schema.resolve(schema)
+    json_schema = request_body_of_refresh_token["content"]["application/json"]["schema"]
+    assert json_schema == %{"$ref" => "#/components/schemas/RefreshTokenForm"}
 
-    assert ExJsonSchema.Validator.validate(schema, %{"refresh_token" => "123"}) == :ok
+    {:ok, compiled} =
+      JSONSchex.compile_fragment(schema,
+        entry_pointer: "#/paths/~1refresh_token/post/requestBody/content/application~1json/schema",
+        base_uri: file_path,
+        format_assertion: true,
+        content_assertion: false
+      )
 
-    assert {:error, _} = ExJsonSchema.Validator.validate(schema, %{})
+    assert JSONSchex.validate(compiled, %{"refresh_token" => "123"}) == :ok
+    assert {:error, _} = JSONSchex.validate(compiled, %{})
   end
 end

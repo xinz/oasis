@@ -3,7 +3,7 @@ defmodule Oasis.Spec.PathTest do
 
   import Oasis.Test.Support.Spec
 
-  alias Oasis.Spec.{Path, Utils}
+  alias Oasis.Spec.{OpenAPIRefResolver, Path}
 
   test "format url" do
     url = "/{a}"
@@ -85,7 +85,7 @@ defmodule Oasis.Spec.PathTest do
     root =
       yaml_str
       |> yaml_to_json_schema()
-      |> Utils.expand_ref()
+      |> OpenAPIRefResolver.resolve()
       |> Path.build()
 
     # the returned parameters by `name` property in asc order
@@ -105,11 +105,17 @@ defmodule Oasis.Spec.PathTest do
     assert p1["required"] == false
     param_content_schema = p1["content"]["application/json"]["schema"]
 
-    assert param_content_schema["type"] == "object"
+    assert param_content_schema == %{"$ref" => "#/components/schemas/Content"}
 
-    properties = param_content_schema["properties"]
-    assert properties["name"] == %{"type" => "string"}
-    assert properties["tag"] == %{"type" => "integer"}
+    {:ok, compiled} =
+      JSONSchex.compile_fragment(schema,
+        entry_pointer: "#/paths/~1page/get/parameters/query/0/content/application~1json/schema",
+        format_assertion: true,
+        content_assertion: false
+      )
+
+    assert JSONSchex.validate(compiled, %{"name" => "hello", "tag" => 1}) == :ok
+    assert {:error, _} = JSONSchex.validate(compiled, %{"name" => "hello", "tag" => "bad"})
   end
 
   test "parameter object with content and schema property" do
@@ -483,14 +489,24 @@ defmodule Oasis.Spec.PathTest do
                 schema:
                   $ref: '#/components/schemas/RefreshTokenForm'
     """
-    %{schema: schema} = yaml_to_json_schema(yaml_str) |> Utils.expand_ref() |> Path.build()
+    %{schema: schema} = yaml_to_json_schema(yaml_str) |> OpenAPIRefResolver.resolve() |> Path.build()
     components = schema["components"]
     content_schema = get_in(components, ["requestBodies", "RefreshTokenForm", "content", "application/json", "schema"])
-    assert content_schema["type"] == "object" and content_schema["required"] == ["refresh_token"]
+    assert content_schema == %{"$ref" => "#/components/schemas/RefreshTokenForm"}
 
     paths = schema["paths"]
     content_schema = get_in(paths, ["/refresh", "post", "requestBody", "content", "application/json", "schema"])
-    assert content_schema["type"] == "object" and content_schema["required"] == ["refresh_token"]
+    assert content_schema == %{"$ref" => "#/components/schemas/RefreshTokenForm"}
+
+    {:ok, compiled} =
+      JSONSchex.compile_fragment(schema,
+        entry_pointer: "#/paths/~1refresh/post/requestBody/content/application~1json/schema",
+        format_assertion: true,
+        content_assertion: false
+      )
+
+    assert JSONSchex.validate(compiled, %{"refresh_token" => "token"}) == :ok
+    assert {:error, _} = JSONSchex.validate(compiled, %{})
   end
 
   test "security bearer auth in global" do
@@ -564,7 +580,7 @@ defmodule Oasis.Spec.PathTest do
               - username
     """
 
-    %{schema: schema} = yaml_to_json_schema(yaml_str) |> Utils.expand_ref() |> Path.build()
+    %{schema: schema} = yaml_to_json_schema(yaml_str) |> OpenAPIRefResolver.resolve() |> Path.build()
 
     security_schemes = Oasis.Spec.Security.security_schemes(schema)
 

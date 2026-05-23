@@ -1,28 +1,21 @@
 defmodule Oasis.Gen.Plug.PreTestFilesUpload do
-
-  use Oasis.Controller
+    use Oasis.Controller
   use Plug.ErrorHandler
+  plug(Plug.Parsers, parsers: [:multipart], pass: ["*/*"])
 
-  plug(
-    Plug.Parsers,
-    parsers: [:multipart],
-    pass: ["*/*"]
-  )
-
-  plug(
-    Oasis.Plug.RequestValidator,
+  plug(Oasis.Plug.RequestValidator,
     body_schema: %{
       "content" => %{
         "multipart/form-data" => %{
-          "schema" => %ExJsonSchema.Schema.Root{
-            schema: %{
-              "properties" => %{
-                "file" => %{"items" => %{}, "type" => "array"},
-                "logo" => %{"type" => "string"},
-                "id" => %{"type" => "integer"}
-              }
-            }
-          }
+          "schema" =>
+            Oasis.Test.JSONSchema.compile!(
+              %{
+                "properties" => %{
+                  "file" => %{"items" => %{}, "type" => "array"},
+                  "logo" => %{"type" => "string"},
+                  "id" => %{"type" => "integer"}
+                }
+              })
         }
       }
     }

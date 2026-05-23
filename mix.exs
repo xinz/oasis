@@ -40,7 +40,7 @@ defmodule Oasis.MixProject do
       {:plug, "~> 1.11"},
       {:plug_crypto, "~> 1.2"},
       {:jason, "~> 1.2"},
-      {:ex_json_schema, "~> 0.7"},
+      {:jsonschex, "~> 0.7"},
       {:recase, "~> 0.7", runtime: false},
       {:plug_cowboy, "~> 2.0", only: [:dev, :test]},
       {:cowboy, "~> 2.12.0", only: [:dev, :test]},
@@ -87,7 +87,7 @@ defmodule Oasis.MixProject do
       Errors: [
         Oasis.BadRequestError.Invalid,
         Oasis.BadRequestError.Required,
-        Oasis.BadRequestError.JsonSchemaValidationFailed,
+        Oasis.BadRequestError.JSONSchemaValidationFailed,
         Oasis.BadRequestError.InvalidToken
       ]
     ]

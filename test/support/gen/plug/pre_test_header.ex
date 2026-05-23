@@ -1,18 +1,13 @@
 defmodule Oasis.Gen.Plug.PreTestHeader do
-  use Oasis.Controller
+    use Oasis.Controller
   use Plug.ErrorHandler
 
-  # Notice:
-  # all header name are downcased when generate `pre-*` handler module
-
-  plug(
-    Oasis.Plug.RequestValidator,
+  plug(Oasis.Plug.RequestValidator,
     header_schema: %{
       "items" => %{
         "required" => true,
-        "schema" => %ExJsonSchema.Schema.Root{
-          schema: %{"items" => %{"type" => "integer"}, "type" => "array"}
-        }
+        "schema" =>
+          Oasis.Test.JSONSchema.compile!(%{"items" => %{"type" => "integer"}, "type" => "array"})
       }
     }
   )
@@ -22,5 +17,4 @@ defmodule Oasis.Gen.Plug.PreTestHeader do
   end
 
   defdelegate handle_errors(conn, error), to: Oasis.Gen.Plug.TestHeader
-
 end

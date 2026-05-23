@@ -24,14 +24,14 @@ The `reason` is an `Oasis.BadRequestError` exception with these errors:
 
   * `Oasis.BadRequestError.Invalid`
   * `Oasis.BadRequestError.Required`
-  * `Oasis.BadRequestError.JsonSchemaValidationFailed`
+  * `Oasis.BadRequestError.JSONSchemaValidationFailed`
   * `Oasis.BadRequestError.InvalidToken`
 
 We can use pattern math to process the potential errors like this:
 
 ```
 def handle_errors(conn, %{kind: _kind, reason: {
-  error: %Oasis.BadRequestError.JsonSchemaValidationFailed{} = error} = reason, stack: _stack}) do
+  error: %Oasis.BadRequestError.JSONSchemaValidationFailed{} = error} = reason, stack: _stack}) do
   # inspect the `error` and `reason` to find more information about this error case.
   ...
 end

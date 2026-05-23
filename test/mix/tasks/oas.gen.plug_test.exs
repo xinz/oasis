@@ -10,7 +10,7 @@ defmodule Mix.Tasks.Oas.Gen.PlugTest do
     :ok
   end
 
-  test "run in root of an umbrella project", config do
+  test("run in root of an umbrella project", config) do
     in_tmp_project(config.test, fn ->
       File.write!("mix.exs", umbrella_mixfile_contents())
       File.mkdir!("apps")
@@ -28,7 +28,7 @@ defmodule Mix.Tasks.Oas.Gen.PlugTest do
     end)
   end
 
-  test "run in one of apps in an umbrella project", config do
+  test("run in one of apps in an umbrella project", config) do
     in_tmp_project(config.test, fn ->
       File.write!("mix.exs", umbrella_mixfile_contents())
       File.mkdir_p!("apps/other_app")
@@ -52,13 +52,11 @@ defmodule Mix.Tasks.Oas.Gen.PlugTest do
     end)
   end
 
-  test "invalid mix argument", config do
+  test("invalid mix argument", config) do
     in_tmp_project(config.test, fn ->
       assert_raise Mix.Error,
                    ~r(Expected input `--file` option to be a valid path to a yaml/json file),
-                   fn ->
-                     Gen.Plug.run([])
-                   end
+                   fn -> Gen.Plug.run([]) end
 
       assert_raise Mix.Error, ~r(Could not find the file in `non_existance.yaml` path), fn ->
         Gen.Plug.run(["--file", "non_existance.yaml"])
@@ -66,7 +64,7 @@ defmodule Mix.Tasks.Oas.Gen.PlugTest do
     end)
   end
 
-  test "generates plugs", config do
+  test("generates plugs", config) do
     in_tmp_project(config.test, fn ->
       file_path = Path.join([__DIR__, "file/petstore-expanded.yaml"])
       Gen.Plug.run(["--file", file_path])
@@ -89,7 +87,11 @@ defmodule Mix.Tasks.Oas.Gen.PlugTest do
         assert file =~ ~s|defmodule Oasis.Gen.PreAddPet do|
         assert file =~ ~s|use Oasis.Controller|
         assert file =~ ~s|plug(\n    Plug.Parsers,|
-        assert file =~ ~s|"application/json" => %{\n          "schema" => %ExJsonSchema.Schema.Root{|
+
+        assert file =~ ~s|"application/json" => %{
+          "schema" =>
+            JSONSchex.Schema.compile!(|
+
         assert file =~ ~s/conn |> super(opts) |> Oasis.Gen.AddPet.call(opts) |> halt()/
       end)
 
@@ -113,7 +115,7 @@ defmodule Mix.Tasks.Oas.Gen.PlugTest do
     end)
   end
 
-  test "generates with bearer token", config do
+  test("generates with bearer token", config) do
     in_tmp_project(config.test, fn ->
       file_path = Path.join([__DIR__, "file/petstore-expanded-with-bearer-auth.yaml"])
       Gen.Plug.run(["--file", file_path])
@@ -147,8 +149,8 @@ defmodule Mix.Tasks.Oas.Gen.PlugTest do
       end)
     end)
   end
-  
-  test "generates with HMAC token", config do
+
+  test("generates with HMAC token", config) do
     in_tmp_project(config.test, fn ->
       file_path = Path.join([__DIR__, "file/petstore-expanded-with-hmac-auth.yaml"])
       Gen.Plug.run(["--file", file_path])

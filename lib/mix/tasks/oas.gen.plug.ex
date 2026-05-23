@@ -45,11 +45,11 @@ defmodule Mix.Tasks.Oas.Gen.Plug do
   end
 
   defp build(opts) do
-    %ExJsonSchema.Schema.Root{schema: schema} = Oasis.Spec.read(opts[:file])
+    %Oasis.Spec.Document{} = document = Oasis.Spec.read(opts[:file])
 
     opts = Keyword.take(opts, [:router, :name_space, :body_reader])
 
-    Mix.Oasis.new(schema, opts)
+    Mix.Oasis.new(document, opts)
   end
 
   defp parse_opts(args) do
