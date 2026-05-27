@@ -168,6 +168,68 @@ defmodule Mix.OasisTest do
                  end
   end
 
+  test "prepare_json_schema!/2 accepts `loader: nil` for self-contained schemas" do
+    # `loader: nil` explicitly disables the default external loader. For
+    # self-contained schemas (no external $refs) this must remain a no-op.
+    schema = %{
+      "type" => "object",
+      "required" => ["name"],
+      "properties" => %{"name" => %{"type" => "string"}}
+    }
+
+    root_spec = %{
+      "paths" => %{
+        "/users" => %{
+          "post" => %{
+            "requestBody" => %{
+              "content" => %{"application/json" => %{"schema" => schema}}
+            }
+          }
+        }
+      }
+    }
+
+    prepared =
+      Mix.Oasis.prepare_json_schema!(schema,
+        root_spec: root_spec,
+        entry_pointer: "#/paths/~1users/post/requestBody/content/application~1json/schema",
+        loader: nil
+      )
+
+    assert valid_schema?(prepared, %{"name" => "Ada"})
+    assert valid_schema?(prepared, %{}) == false
+  end
+
+  test "prepare_json_schema!/2 with `loader: nil` surfaces external ref errors" do
+    # `loader: nil` is the documented opt-out from external loading. When the
+    # schema actually contains an external $ref, bundling must fail rather than
+    # silently fall back to a default loader.
+    schema = %{"$ref" => "./schemas/user.yaml"}
+
+    root_spec = %{
+      "paths" => %{
+        "/users" => %{
+          "post" => %{
+            "requestBody" => %{
+              "content" => %{"application/json" => %{"schema" => schema}}
+            }
+          }
+        }
+      }
+    }
+
+    assert_raise ArgumentError,
+                 ~r/Failed to bundle JSON Schema fragment.*entry=#\/paths\/~1users\/post\/requestBody\/content\/application~1json\/schema/s,
+                 fn ->
+                   Mix.Oasis.prepare_json_schema!(schema,
+                     root_spec: root_spec,
+                     entry_pointer: "#/paths/~1users/post/requestBody/content/application~1json/schema",
+                     base_uri: "/tmp/api/openapi.yaml",
+                     loader: nil
+                   )
+                 end
+  end
+
   test "Mix.Oasis.new/2 invalid spec" do
     spec = %{
       "components" => %{

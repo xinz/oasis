@@ -248,23 +248,26 @@ defmodule Mix.Oasis do
   end
 
   defp bundle_fragment!(root_spec, opts) do
-    fragment_opts = fragment_options(opts)
+    # JSONSchex only invokes the loader when an unresolved external $ref is
+    # actually reached, so passing the default loader unconditionally has no
+    # cost for self-contained schemas. This keeps the failure path simple: one
+    # call, one definitive error, no risk of masking the real diagnostic.
+    #
+    # Callers may override with their own loader via the `:loader` option, or
+    # explicitly disable loading by passing `loader: nil`.
+    loader = Keyword.get(opts, :loader, &Oasis.Spec.Document.load_external/1)
+
+    fragment_opts =
+      opts
+      |> fragment_options()
+      |> Keyword.put(:loader, loader)
 
     case JSONSchex.bundle_fragment(root_spec, fragment_opts) do
       {:ok, bundled} ->
         compact_bundled_schema(bundled)
 
-      {:error, _error_without_loader} ->
-        loader = Keyword.get(opts, :loader, &Oasis.Spec.Document.load_external/1)
-        fragment_opts = Keyword.put_new(fragment_opts, :loader, loader)
-
-        case JSONSchex.bundle_fragment(root_spec, fragment_opts) do
-          {:ok, bundled} ->
-            compact_bundled_schema(bundled)
-
-          {:error, error} ->
-            raise_json_schema_error!(error, opts, "bundle JSON Schema fragment")
-        end
+      {:error, error} ->
+        raise_json_schema_error!(error, opts, "bundle JSON Schema fragment")
     end
   end
 
