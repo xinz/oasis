@@ -39,12 +39,26 @@ defmodule Oasis do
 
     defmodule JSONSchemaValidationFailed do
       @moduledoc """
-      This error is used to indicate could not pass the validation of the defined json schema.
+      Indicates that a request input failed JSON Schema validation.
 
-      This module wraps a `JSONSchex.Types.Error`; more detailed validation information
-      is available in the `:error` field.
+      This struct wraps the underlying `JSONSchex.Types.Error` so detailed
+      validation context is available to custom error handlers.
+
+      ## Fields
+
+      - `:error` - the underlying `t:JSONSchex.Types.Error.t/0`.
+      - `:path` - a JSON Pointer string addressing the offending value inside the
+        request payload, e.g. `"#/name"`. Pointer segments are escaped per
+        RFC 6901 (`~` → `~0`, `/` → `~1`).
+
+      Generated Oasis modules do not embed OpenAPI source metadata at runtime;
+      the route/parameter context that produced this error is already available
+      from `t:Plug.Conn.t/0` (`method`, `request_path`, `path_info`, headers) plus
+      the surrounding `Oasis.BadRequestError`'s `:use_in` and `:param_name`
+      fields. For generation-time source locations into the OpenAPI document,
+      see `Mix.Oasis.Router`'s `:source_meta` field.
       """
-      defstruct [:error, :path, :source]
+      defstruct [:error, :path]
     end
 
     defmodule InvalidToken do
