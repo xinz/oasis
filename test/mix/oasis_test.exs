@@ -68,12 +68,11 @@ defmodule Mix.OasisTest do
     files = Mix.Oasis.new(document, [])
     router = pre_plug_router(files, "createUser")
     schema = get_in(router.body_schema, ["content", "application/json", "schema"])
-    source = get_in(router.body_schema, ["content", "application/json", "x-oasis-source"])
+    source = get_in(router.source_meta, [:body_schema, "application/json"])
 
     assert Map.has_key?(schema, "$defs")
     refute Map.has_key?(schema, "paths")
     refute Map.has_key?(schema, "openapi")
-    assert source.entry_pointer == "#/paths/~1users/post/requestBody/content/application~1json/schema"
     assert source.path == "/users"
     assert source.http_verb == "post"
     assert source.content_type == "application/json"
@@ -104,16 +103,52 @@ defmodule Mix.OasisTest do
 
     files = Mix.Oasis.new(document, [])
     router = pre_plug_router(files, "getUser")
-    %{"id" => %{"schema" => schema, "required" => true, "x-oasis-source" => source}} = router.path_schema
 
-    assert source.entry_pointer == "#/paths/~1users~1:id/get/parameters/path/0/schema"
-    assert source.path == "/users/:id"
+    %{"id" => %{"schema" => schema, "required" => true} = _parameter} = router.path_schema
+
+    source = get_in(router.source_meta, [:path_schema, "id"])
+
+    assert source.path == "/users/{id}"
     assert source.http_verb == "get"
     assert source.parameter_location == "path"
     assert source.parameter_name == "id"
 
     assert valid_schema?(schema, 123)
     assert valid_schema?(schema, "123") == false
+  end
+
+  test "Mix.Oasis.new/2 source_meta locates parameters against the raw OpenAPI document" do
+    file_path = Path.expand("tasks/file/jsonschex_boundary/external_openapi_ref.yaml", __DIR__)
+    %Oasis.Spec.Document{} = document = Oasis.Spec.read(file_path)
+
+    {:ok, raw_document} = YamlElixir.read_from_file(file_path)
+
+    router =
+      document
+      |> Mix.Oasis.new([])
+      |> pre_plug_router("getUser")
+
+    source = get_in(router.source_meta, [:path_schema, "id"])
+
+    operation = get_in(raw_document, ["paths", source.path, source.http_verb])
+    assert is_map(operation)
+
+    assert [%{"$ref" => "./common.yaml#/components/parameters/UserId"}] =
+             Map.fetch!(operation, "parameters")
+  end
+
+  test "generated pre_plug schema literals contain no x-oasis-source key" do
+    file_path = Path.expand("tasks/file/jsonschex_boundary/external_schema.yaml", __DIR__)
+    document = Oasis.Spec.read(file_path)
+
+    router =
+      document
+      |> Mix.Oasis.new([])
+      |> pre_plug_router("createUser")
+
+    rendered = Mix.Oasis.render_embedded_schemas(router.body_schema)
+
+    refute rendered =~ "x-oasis-source"
   end
 
   test "prepare_json_schema!/2 accepts a custom loader for library callers" do

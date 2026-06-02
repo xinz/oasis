@@ -20,23 +20,33 @@ defmodule Oasis.Spec.Document do
   alias Oasis.{FileNotFoundError, InvalidSpecError}
 
   @enforce_keys [:schema]
-  defstruct [:schema, :source_path, :format]
+  defstruct [:schema, :source_path, :format, url_aliases: %{}]
 
   @type t :: %__MODULE__{
           schema: map(),
           source_path: String.t() | nil,
-          format: String.t() | nil
+          format: String.t() | nil,
+          url_aliases: %{optional(String.t()) => String.t()}
         }
 
   @doc """
   Wraps a decoded OpenAPI map with source metadata.
+
+  Options:
+
+  - `:source_path` - file path the document was loaded from (used as base URI).
+  - `:format` - `"yaml"`, `"yml"`, or `"json"`.
+  - `:url_aliases` - map of post-processed (Plug-style) URL key to the original
+    OpenAPI URL key. Populated by `Oasis.Spec.Path.build/1`; preserved here so
+    downstream code can report locations using the user's original spec syntax.
   """
   @spec new(map(), keyword()) :: t()
   def new(schema, opts \\ []) when is_map(schema) do
     %__MODULE__{
       schema: schema,
       source_path: opts[:source_path],
-      format: opts[:format]
+      format: opts[:format],
+      url_aliases: Keyword.get(opts, :url_aliases, %{})
     }
   end
 
@@ -79,17 +89,16 @@ defmodule Oasis.Spec.Document do
   @doc """
   Loader callback for external OpenAPI and JSON Schema resources.
 
-  This function intentionally follows the JSONSchex loader contract:
+  This function follows the JSONSchex loader contract:
 
       {:ok, %{document: decoded, base_uri: source_path}}
 
-  `:base_uri` replaces older `:source` metadata and tells JSONSchex how to
-  resolve relative refs inside the loaded document. Oasis also reuses this
-  loader for external OpenAPI Reference Objects in `OpenAPIRefResolver`.
+  `:base_uri` tells JSONSchex how to resolve relative refs inside the loaded
+  document. Oasis also reuses this loader for external OpenAPI Reference Objects
+  in `Oasis.Spec.OpenAPIRefResolver`.
   """
   @spec load_external(String.t()) ::
-          {:ok, map() | boolean()}
-          | {:ok, %{required(:document) => map() | boolean(), optional(:base_uri) => String.t()}}
+          {:ok, %{document: map() | boolean(), base_uri: String.t()}}
           | {:error, term()}
   def load_external(path) when is_binary(path) do
     case load_file(path) do

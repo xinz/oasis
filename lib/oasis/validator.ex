@@ -49,8 +49,8 @@ defmodule Oasis.Validator do
     nil
   end
 
-  defp process({%{"schema" => json_schema_root} = definition, use_in, name, value}) do
-    do_parse_and_validate!(json_schema_root, use_in, name, value, Map.get(definition, "x-oasis-source"))
+  defp process({%{"schema" => json_schema_root}, use_in, name, value}) do
+    do_parse_and_validate!(json_schema_root, use_in, name, value)
   end
 
   defp process({%{"content" => content}, use_in, name, value}) do
@@ -65,23 +65,22 @@ defmodule Oasis.Validator do
          %JSONSchex.Types.Schema{raw: raw_schema} = json_schema_root,
          "body",
          param_name,
-         %{"_json" => value} = wrapped_value,
-         source
+         %{"_json" => value} = wrapped_value
        ) do
     if unwrap_json_body?(raw_schema, value) do
       # Since `Plug.Parsers.JSON` parses a non-map body content into a "_json" key to allow proper param merging, here
       # will unwrap the "_json" key and format the input body params as a matched type to the defined OpenAPI specification.
-      do_parse_and_validate!(json_schema_root, "body", param_name, value, source)
+      do_parse_and_validate!(json_schema_root, "body", param_name, value)
     else
-      do_parse_and_validate_value!(json_schema_root, "body", param_name, wrapped_value, source)
+      do_parse_and_validate_value!(json_schema_root, "body", param_name, wrapped_value)
     end
   end
 
-  defp do_parse_and_validate!(%JSONSchex.Types.Schema{} = json_schema_root, use_in, param_name, value, source) do
-    do_parse_and_validate_value!(json_schema_root, use_in, param_name, value, source)
+  defp do_parse_and_validate!(%JSONSchex.Types.Schema{} = json_schema_root, use_in, param_name, value) do
+    do_parse_and_validate_value!(json_schema_root, use_in, param_name, value)
   end
 
-  defp do_parse_and_validate_value!(%JSONSchex.Types.Schema{raw: schema} = json_schema_root, use_in, param_name, value, source) do
+  defp do_parse_and_validate_value!(%JSONSchex.Types.Schema{raw: schema} = json_schema_root, use_in, param_name, value) do
     try do
       Oasis.Parser.parse(schema, value)
     rescue
@@ -106,7 +105,7 @@ defmodule Oasis.Validator do
 
           {:error, %JSONSchex.Types.Error{} = error} ->
             raise BadRequestError,
-              error: %BadRequestError.JSONSchemaValidationFailed{error: error, path: path_pointer(error), source: source},
+              error: %BadRequestError.JSONSchemaValidationFailed{error: error, path: path_pointer(error)},
               use_in: use_in,
               param_name: param_name,
               message: "Failed to validate JSON schema with an error: #{format_error(error)}"
@@ -284,63 +283,63 @@ defmodule Oasis.Validator do
 
   defp process_media_type(
          "text/plain" <> _charset,
-         %{"schema" => json_schema_root} = media_type,
+         %{"schema" => json_schema_root},
          use_in,
          name,
          value
        ) do
-    do_parse_and_validate!(json_schema_root, use_in, name, value, Map.get(media_type, "x-oasis-source"))
+    do_parse_and_validate!(json_schema_root, use_in, name, value)
   end
 
   defp process_media_type(
          "application/json" <> _charset,
-         %{"schema" => json_schema_root} = media_type,
+         %{"schema" => json_schema_root},
          use_in,
          name,
          value
        ) do
-    do_parse_and_validate!(json_schema_root, use_in, name, value, Map.get(media_type, "x-oasis-source"))
+    do_parse_and_validate!(json_schema_root, use_in, name, value)
   end
 
   defp process_media_type(
          "application/x-www-form-urlencoded" <> _charset,
-         %{"schema" => json_schema_root} = media_type,
+         %{"schema" => json_schema_root},
          use_in,
          name,
          value
        ) do
-    do_parse_and_validate!(json_schema_root, use_in, name, value, Map.get(media_type, "x-oasis-source"))
+    do_parse_and_validate!(json_schema_root, use_in, name, value)
   end
 
   defp process_media_type(
          "multipart/form-data" <> _boundary,
-         %{"schema" => json_schema_root} = media_type,
+         %{"schema" => json_schema_root},
          use_in,
          name,
          value
        ) do
-    do_parse_and_validate!(json_schema_root, use_in, name, value, Map.get(media_type, "x-oasis-source"))
+    do_parse_and_validate!(json_schema_root, use_in, name, value)
   end
 
   defp process_media_type(
          "multipart/mixed" <> _boundary,
-         %{"schema" => json_schema_root} = media_type,
+         %{"schema" => json_schema_root},
          use_in,
          name,
          value
        ) do
-    do_parse_and_validate!(json_schema_root, use_in, name, value, Map.get(media_type, "x-oasis-source"))
+    do_parse_and_validate!(json_schema_root, use_in, name, value)
   end
 
   defp process_media_type(
          "application/" <> subtype,
-         %{"schema" => json_schema_root} = media_type,
+         %{"schema" => json_schema_root},
          use_in,
          name,
          value
        ) do
     if String.ends_with?(subtype, "+json") do
-      do_parse_and_validate!(json_schema_root, use_in, name, value, Map.get(media_type, "x-oasis-source"))
+      do_parse_and_validate!(json_schema_root, use_in, name, value)
     else
       value
     end

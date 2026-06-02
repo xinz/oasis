@@ -38,18 +38,23 @@ defmodule Oasis.Spec.Path do
   def build(%Oasis.Spec.Document{schema: schema} = root) do
     paths = schema["paths"] || %{}
 
-    paths =
-      Enum.reduce(paths, %{}, fn
-        {"/" <> _ = path_expr, _info} = path, acc ->
-          Map.put(acc, format_url(path_expr), map_path(path))
+    {paths, aliases} =
+      Enum.reduce(paths, {%{}, %{}}, fn
+        {"/" <> _ = path_expr, _info} = path, {paths_acc, aliases_acc} ->
+          formatted = format_url(path_expr)
 
-        {field, value}, acc ->
-          Map.put(acc, field, value)
+          {
+            Map.put(paths_acc, formatted, map_path(path)),
+            Map.put(aliases_acc, formatted, path_expr)
+          }
+
+        {field, value}, {paths_acc, aliases_acc} ->
+          {Map.put(paths_acc, field, value), aliases_acc}
       end)
 
     schema = Map.put(schema, "paths", paths)
 
-    %{root | schema: schema}
+    %{root | schema: schema, url_aliases: aliases}
   end
 
   def build(schema) when is_map(schema) do

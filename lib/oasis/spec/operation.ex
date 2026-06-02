@@ -2,12 +2,17 @@ defmodule Oasis.Spec.Operation do
   @moduledoc false
 
   def build(path_expr, operation, global_params) do
-    parameters = global_params ++ (operation["parameters"] || [])
-
-    parameters = group_and_override(parameters, path_expr)
+    parameters =
+      global_params
+      |> concat_params(operation["parameters"])
+      |> group_and_override(path_expr)
 
     Map.put(operation, "parameters", parameters)
   end
+
+  defp concat_params(global_params, nil), do: global_params
+  defp concat_params(global_params, []), do: global_params
+  defp concat_params(global_params, operation_params), do: global_params ++ operation_params
 
   defp group_and_override(parameters, path_expr) do
     parameters

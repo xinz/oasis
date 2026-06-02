@@ -2,27 +2,29 @@ defmodule Oasis.ValidatorTest do
     use ExUnit.Case
   alias Oasis.Validator
 
-  test "validation errors include Oasis source metadata when present" do
-    source = %{
-      entry_pointer: "#/paths/~1users/get/parameters/path/0/schema",
-      path: "/users/{id}",
-      http_verb: "get",
-      parameter_location: "path",
-      parameter_name: "id"
-    }
-
+  test "validation errors expose use_in/param_name and underlying JSONSchex error" do
     param = %{
       "required" => true,
-      "x-oasis-source" => source,
-      "schema" => Oasis.Test.JSONSchema.compile!(%{"type" => "integer", "minimum" => 10})
+      "schema" =>
+        Oasis.Test.JSONSchema.compile!(%{
+          "type" => "object",
+          "required" => ["name"],
+          "properties" => %{"name" => %{"type" => "string"}}
+        })
     }
 
     try do
-      Validator.parse_and_validate!(param, "path", "id", "1")
+      Validator.parse_and_validate!(param, "body", "user", %{})
       flunk("expected Oasis.BadRequestError")
     rescue
       error in Oasis.BadRequestError ->
-        assert %Oasis.BadRequestError.JSONSchemaValidationFailed{source: ^source} = error.error
+        assert error.use_in == "body"
+        assert error.param_name == "user"
+
+        assert %Oasis.BadRequestError.JSONSchemaValidationFailed{
+                 error: %JSONSchex.Types.Error{rule: :required},
+                 path: "#"
+               } = error.error
     end
   end
 

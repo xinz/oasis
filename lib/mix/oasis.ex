@@ -73,18 +73,22 @@ defmodule Mix.Oasis do
 
   @bundled_schema_document_keys @bundled_schema_context_keywords ++ @json_schema_document_keywords
 
-  def new(%Document{schema: %{"paths" => paths} = spec, source_path: source_path}, opts)
+  def new(%Document{schema: %{"paths" => paths} = spec, source_path: source_path, url_aliases: url_aliases}, opts)
       when is_map(paths) do
     opts =
       opts
       |> Keyword.put_new(:root_spec, spec)
       |> Keyword.put_new(:base_uri, source_path)
+      |> Keyword.put_new(:url_aliases, url_aliases)
 
     Mix.Oasis.Router.generate_files_by_paths_spec(generator_paths(), spec, opts)
   end
 
   def new(%{"paths" => paths} = spec, opts) when is_map(paths) do
-    opts = Keyword.put_new(opts, :root_spec, spec)
+    opts =
+      opts
+      |> Keyword.put_new(:root_spec, spec)
+      |> Keyword.put_new(:url_aliases, %{})
 
     Mix.Oasis.Router.generate_files_by_paths_spec(generator_paths(), spec, opts)
   end
