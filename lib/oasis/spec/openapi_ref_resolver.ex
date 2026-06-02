@@ -92,8 +92,8 @@ defmodule Oasis.Spec.OpenAPIRefResolver do
   - `:base_uri` — file path or URI used to resolve relative external OpenAPI
     refs. Required when the document contains external refs.
   - `:loader` — optional. Defaults to `&Oasis.Spec.Document.load_external/1`. Pass
-    a custom function to use your own loader, or `nil` to disable external loading. Loader wrapper
-    responses must use atom metadata keys only: `{:ok, %{document: schema,
+    a custom function to use your own loader, or `nil` to disable external loading.
+    Loader wrapper responses must use atom metadata keys only: `{:ok, %{document: schema,
     base_uri: base_uri}}`.
   - Any other option recognized by `JSONSchex.Ref.resolve_selected/2` is
     forwarded unchanged.

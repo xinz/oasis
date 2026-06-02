@@ -206,7 +206,7 @@ defmodule Mix.Oasis.Router do
   defp merge_parameters_to_operation(operation, _opts), do: {%{}, operation}
 
   defp merge_request_body_to_operation(
-         {acc, %{"requestBody" => %{"content" => content} = request_body} = operation},
+         {router, %{"requestBody" => %{"content" => content} = request_body} = operation},
          opts
        )
        when is_map(content) do
@@ -231,19 +231,18 @@ defmodule Mix.Oasis.Router do
 
     if content == %{} do
       # skip if no "schema" defined in Media Type Object.
-      {acc, operation}
+      {router, operation}
     else
-      body_schema = put_required_if_exists(request_body, %{"content" => content})
-      acc = Map.put(acc, :body_schema, body_schema)
+      router =
+        router
+        |> Map.put(:body_schema, put_required_if_exists(request_body, %{"content" => content}))
+        |> update_in([Access.key(:source_meta, %{})], &Map.put(&1, :body_schema, body_source_meta))
 
-      acc =
-        update_in(acc, [Access.key(:source_meta, %{})], &Map.put(&1, :body_schema, body_source_meta))
-
-      {acc, operation}
+      {router, operation}
     end
   end
 
-  defp merge_request_body_to_operation({acc, operation}, _opts), do: {acc, operation}
+  defp merge_request_body_to_operation({router, operation}, _opts), do: {router, operation}
 
   defp put_required_if_exists(%{"required" => required}, map)
        when is_boolean(required) and is_map(map) do
@@ -359,7 +358,7 @@ defmodule Mix.Oasis.Router do
     |> String.replace("/", "~1")
   end
 
-  defp merge_security_to_operation({acc, operation}, opts) do
+  defp merge_security_to_operation({router, operation}, opts) do
     {global_security, security_schemes} = opts[:global_security]
     security =
       case Oasis.Spec.Security.build(operation, security_schemes) do
@@ -368,17 +367,17 @@ defmodule Mix.Oasis.Router do
       end
 
     {
-      Map.put(acc, :security, security),
+      Map.put(router, :security, security),
       operation
     }
   end
 
-  defp merge_others_to_operation({acc, operation}, opts) do
+  defp merge_others_to_operation({router, operation}, opts) do
     # Use the input `name_space` option from command line if existed
     name_space_from_spec = Map.get(operation, @spec_ext_name_space)
     name_space = opts[:name_space] || name_space_from_spec
 
-    acc
+    router
     |> Map.put(:operation_id, Map.get(operation, "operationId"))
     |> Map.put(:name_space, name_space)
   end
