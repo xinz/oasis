@@ -86,6 +86,18 @@ defmodule Oasis.Spec.Document do
     end
   end
 
+  @typedoc """
+  Structured error returned by `load_external/1`. Each tuple carries the
+  offending file path so callers (most importantly the JSONSchex loader
+  pipeline and `Oasis.Spec.OpenAPIRefResolver`) can build precise diagnostics.
+  """
+  @type load_external_error ::
+          {:missing_file, String.t()}
+          | {:yaml_parse_error, String.t(), String.t()}
+          | {:json_parse_error, String.t()}
+          | {:unsupported_format, String.t(), String.t()}
+          | {:yaml_load_error, String.t(), term()}
+
   @doc """
   Loader callback for external OpenAPI and JSON Schema resources.
 
@@ -98,8 +110,8 @@ defmodule Oasis.Spec.Document do
   in `Oasis.Spec.OpenAPIRefResolver`.
   """
   @spec load_external(String.t()) ::
-          {:ok, %{document: map() | boolean(), base_uri: String.t()}}
-          | {:error, term()}
+          {:ok, %{document: map(), base_uri: String.t()}}
+          | {:error, load_external_error()}
   def load_external(path) when is_binary(path) do
     case load_file(path) do
       {:ok, %{document: document, source: source}} ->
