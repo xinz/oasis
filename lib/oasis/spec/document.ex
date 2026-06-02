@@ -101,13 +101,33 @@ defmodule Oasis.Spec.Document do
   @doc """
   Loader callback for external OpenAPI and JSON Schema resources.
 
-  This function follows the JSONSchex loader contract:
+  ## Contract
 
-      {:ok, %{document: decoded, base_uri: source_path}}
+  `load_external/1` implements the JSONSchex loader contract:
 
-  `:base_uri` tells JSONSchex how to resolve relative refs inside the loaded
-  document. Oasis also reuses this loader for external OpenAPI Reference Objects
-  in `Oasis.Spec.OpenAPIRefResolver`.
+      load_external(path :: String.t()) ::
+          {:ok, %{document: map(), base_uri: String.t()}}
+        | {:error, load_external_error()}
+
+  - **`:document`** — the decoded YAML/JSON document, always a map (booleans,
+    scalars, and lists are not produced for the OpenAPI / JSON-Schema sources
+    Oasis loads).
+  - **`:base_uri`** — the resolved file path. Used by JSONSchex (and by
+    `Oasis.Spec.OpenAPIRefResolver`) to resolve relative refs that appear
+    **inside** the loaded document against the right base.
+
+  ## Where it is used
+
+  - Default `:loader` for `JSONSchex.bundle_fragment/2` /
+    `JSONSchex.compile_fragment/2` calls inside
+    `Mix.Oasis.prepare_json_schema!/2`.
+  - Default `:loader` for `Oasis.Spec.OpenAPIRefResolver.resolve/2` when
+    following external OpenAPI Reference Objects (e.g.
+    `$ref: "./common.yaml#/components/parameters/UserId"`).
+
+  Callers wanting in-memory or test-only loaders may override `:loader` with
+  any function matching this signature, or pass `loader: nil` to opt out of
+  external loading entirely (any unresolved external `$ref` then raises).
   """
   @spec load_external(String.t()) ::
           {:ok, %{document: map(), base_uri: String.t()}}

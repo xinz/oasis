@@ -239,10 +239,47 @@ defmodule Mix.Oasis do
   When `:root_spec` and `:entry_pointer` are available, JSONSchex bundles the
   fragment in its containing OpenAPI document context and returns a standalone
   schema. Otherwise, the schema is treated as already standalone.
+
+  ## Options
+
+  - `:root_spec` — the containing OpenAPI document map. Required together with
+    `:entry_pointer` (or `:entry_ref`) for fragment bundling. Without it, the
+    `schema` is assumed to be self-contained.
+  - `:entry_pointer` — JSON Pointer (string) into `:root_spec` identifying the
+    schema fragment to bundle (e.g. `"#/paths/~1users/post/requestBody/content/application~1json/schema"`).
+  - `:entry_ref` — alternative to `:entry_pointer`: a full `$ref`-style URI
+    pointing at the fragment. Forwarded to `JSONSchex.bundle_fragment/2`.
+  - `:base_uri` — base URI used to resolve relative external refs inside
+    `:root_spec`. Forwarded to `JSONSchex.bundle_fragment/2`.
+  - `:loader` — external-resource loader. Defaults to
+    `&Oasis.Spec.Document.load_external/1`. Pass `loader: nil` to opt out of
+    external loading (any unresolved external `$ref` then raises).
+
+  ## Behavior
+
+  Returns the bundled (or pass-through) JSON Schema map/boolean as data —
+  **not** a compiled `%JSONSchex.Types.Schema{}`. The returned map is suitable
+  for embedding into generated `pre_*.ex` modules via `JSONSchex.Schema.compile!/2`
+  at compile time.
+
+  Raises `ArgumentError` if bundling or the compile precheck fails. Error
+  messages include the entry pointer/ref and base URI for diagnostics.
   """
   def prepare_json_schema!(schema, opts \\ []) when is_map(schema) or is_boolean(schema) do
     schema = bundle_schema_entrypoint(schema, opts)
 
+    # Intentional double-compile: we discard `_compiled` and return the *data*
+    # form so the generated `pre_*.ex` template can re-embed it via
+    # `JSONSchex.Schema.compile!/2` at the call site's compile time.
+    #
+    # The precheck here exists purely to fail fast at `mix oas.gen.plug` time
+    # with a clear `ArgumentError` (carrying entry pointer / base URI context)
+    # instead of letting a malformed bundled schema surface later as a cryptic
+    # macro-expansion error inside the generated module's compilation.
+    #
+    # Do NOT "optimize" this away — the runtime compile is not redundant; it is
+    # the only validation that the bundled fragment actually compiles before we
+    # commit it to disk.
     _compiled = compile_prepared_json_schema!(schema, opts)
 
     schema

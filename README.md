@@ -184,7 +184,32 @@ This means external shared schema files and recursive schemas are handled by `js
 
 Library callers can pass a custom JSONSchex-compatible `:loader` through Oasis generation options when they need non-default file lookup or in-memory resources. The mix task keeps the default local YAML/JSON loader and does not expose custom loader configuration.
 
-Generated schema definitions include Oasis source metadata, so validation failures can retain the OpenAPI entry pointer and operation context for custom error handlers. Oasis also compacts bundled standalone schemas by keeping known JSON Schema document keywords plus the OpenAPI `components` context needed by preserved component refs.
+#### Bundled schema shape
+
+The schemas embedded in generated `pre_*.ex` modules are **standalone bundles** — they are *not* a verbatim copy of the original OpenAPI fragment. JSONSchex collects everything the fragment transitively `$ref`s, then Oasis compacts the result to JSON-Schema-only top-level keys. In practice this means a generated `body_schema` may legitimately include:
+
+* `"$defs"` — inlined definitions JSONSchex pulled in while bundling.
+* `"components"` — retained unconditionally so component-level Schema Object `$ref`s stay resolvable inside the bundled graph.
+
+Top-level OpenAPI document keys (`openapi`, `info`, `servers`, `tags`, `webhooks`, `externalDocs`, `paths`) are stripped, so the embedded value is a clean JSON Schema document, not an OpenAPI document.
+
+#### Generation-time vs. runtime source metadata
+
+OpenAPI source locations (path, HTTP verb, parameter location/name, content type) are exposed **at generation time** on the public `:source_meta` field of `%Mix.Oasis.Router{}`. They are *not* embedded into generated runtime modules — the runtime stays small and Plug-native.
+
+For runtime error handling, `Oasis.BadRequestError` carries `:use_in` and `:param_name`, and its `:error` field will be an `%Oasis.BadRequestError.JSONSchemaValidationFailed{}` whenever the failure originated from JSON Schema validation. That struct exposes the underlying `%JSONSchex.Types.Error{}` plus a RFC 6901 JSON Pointer (`:path`) into the offending payload:
+
+```elixir
+def handle_errors(conn, %{reason: %Oasis.BadRequestError{
+      error: %Oasis.BadRequestError.JSONSchemaValidationFailed{path: pointer},
+      use_in: use_in,
+      param_name: param_name
+    }}) do
+  send_resp(conn, 400, "#{use_in} parameter `#{param_name}` failed validation at #{pointer}")
+end
+```
+
+See `guides/handle_errors.md` for the full pattern.
 
 ### Special instructions
 
