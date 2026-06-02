@@ -128,4 +128,110 @@ defmodule Oasis.Spec.OpenAPIRefResolverTest do
       })
     end
   end
+
+  describe "resolver error kinds" do
+    test ":missing_target when local component ref does not exist" do
+      assert_raise Oasis.InvalidSpecError, ~r/Could not resolve OpenAPI ref/, fn ->
+        OpenAPIRefResolver.resolve(%{
+          "paths" => %{
+            "/users" => %{
+              "get" => %{
+                "parameters" => [%{"$ref" => "#/components/parameters/DoesNotExist"}]
+              }
+            }
+          }
+        })
+      end
+    end
+
+    test ":missing_base_uri when external ref is used without :base_uri" do
+      assert_raise Oasis.InvalidSpecError,
+                   ~r/external OpenAPI ref `.*` because the containing document base URI is missing/,
+                   fn ->
+                     OpenAPIRefResolver.resolve(%{
+                       "paths" => %{
+                         "/users" => %{
+                           "$ref" => "./other.yaml#/components/pathItems/Users"
+                         }
+                       }
+                     })
+                   end
+    end
+
+    test ":missing_loader when external ref is used and :loader is nil" do
+      assert_raise Oasis.InvalidSpecError,
+                   ~r/no loader was provided/,
+                   fn ->
+                     OpenAPIRefResolver.resolve(
+                       %{
+                         "paths" => %{
+                           "/users" => %{
+                             "$ref" => "./other.yaml#/components/pathItems/Users"
+                           }
+                         }
+                       },
+                       base_uri: "/tmp/root.yaml",
+                       loader: nil
+                     )
+                   end
+    end
+
+    test ":missing_external_document when external file cannot be loaded" do
+      base_uri = Path.expand("file/external_openapi/root.yaml", __DIR__)
+
+      assert_raise Oasis.InvalidSpecError,
+                   ~r/Could not resolve external OpenAPI ref `.*missing.yaml/,
+                   fn ->
+                     OpenAPIRefResolver.resolve(
+                       %{
+                         "paths" => %{
+                           "/users" => %{
+                             "$ref" => "./missing.yaml#/components/pathItems/Users"
+                           }
+                         }
+                       },
+                       base_uri: base_uri
+                     )
+                   end
+    end
+
+    test ":invalid_loader_response when custom loader returns a malformed payload" do
+      invalid_loader = fn _uri -> {:ok, "not-a-map"} end
+
+      assert_raise Oasis.InvalidSpecError,
+                   ~r/Invalid external OpenAPI ref loader response/,
+                   fn ->
+                     OpenAPIRefResolver.resolve(
+                       %{
+                         "paths" => %{
+                           "/users" => %{
+                             "$ref" => "./anything.yaml#/components/pathItems/Users"
+                           }
+                         }
+                       },
+                       base_uri: "/tmp/root.yaml",
+                       loader: invalid_loader
+                     )
+                   end
+    end
+
+    test ":cycle_detected when two external path items reference each other" do
+      base_uri = Path.expand("file/external_openapi/cycle/root.yaml", __DIR__)
+
+      assert_raise Oasis.InvalidSpecError,
+                   ~r/creates a cycle/,
+                   fn ->
+                     OpenAPIRefResolver.resolve(
+                       %{
+                         "paths" => %{
+                           "/users" => %{
+                             "$ref" => "./a.yaml#/cyclePath"
+                           }
+                         }
+                       },
+                       base_uri: base_uri
+                     )
+                   end
+    end
+  end
 end
