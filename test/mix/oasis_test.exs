@@ -299,6 +299,111 @@ defmodule Mix.OasisTest do
                  end
   end
 
+  test "Mix.Oasis.new/2 honors a custom :loader for external schema refs" do
+    file_path = Path.expand("tasks/file/jsonschex_boundary/external_schema.yaml", __DIR__)
+    %Oasis.Spec.Document{} = document = Oasis.Spec.read(file_path)
+
+    parent = self()
+    ref = make_ref()
+
+    loader = fn path ->
+      send(parent, {:custom_loader_invoked, ref, path})
+      Oasis.Spec.Document.load_external(path)
+    end
+
+    files = Mix.Oasis.new(document, loader: loader)
+    router = pre_plug_router(files, "createUser")
+    schema = get_in(router.body_schema, ["content", "application/json", "schema"])
+
+    assert_received {:custom_loader_invoked, ^ref, _path}
+
+    assert valid_schema?(schema, %{"name" => "Ada", "age" => 42})
+    refute valid_schema?(schema, %{"age" => 42})
+  end
+
+  test "prepare_json_schema!/2 accepts :entry_ref to bundle a fragment" do
+    root_spec = %{
+      "components" => %{
+        "schemas" => %{
+          "User" => %{
+            "type" => "object",
+            "required" => ["name"],
+            "properties" => %{
+              "name" => %{"type" => "string"},
+              "age" => %{"type" => "integer"}
+            }
+          }
+        }
+      }
+    }
+
+    schema = get_in(root_spec, ["components", "schemas", "User"])
+
+    prepared =
+      Mix.Oasis.prepare_json_schema!(schema,
+        root_spec: root_spec,
+        entry_ref: "#/components/schemas/User"
+      )
+
+    assert is_map(prepared)
+    assert valid_schema?(prepared, %{"name" => "Ada", "age" => 42})
+    refute valid_schema?(prepared, %{"age" => 42})
+  end
+
+  test "prepare_json_schema!/2 compaction retains components and drops top-level OpenAPI keys" do
+    {:ok, root_spec} =
+      YamlElixir.read_from_string("""
+      openapi: 3.1.0
+      info:
+        title: Compaction Policy
+        version: 1.0.0
+      servers:
+        - url: https://example.com
+      tags:
+        - name: users
+      externalDocs:
+        url: https://example.com/docs
+      webhooks: {}
+      components:
+        schemas:
+          Unused:
+            type: string
+      paths:
+        /users:
+          post:
+            operationId: createUser
+            requestBody:
+              required: true
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    required:
+                      - name
+                    properties:
+                      name:
+                        type: string
+      """)
+
+    schema = get_in(root_spec, ["paths", "/users", "post", "requestBody", "content", "application/json", "schema"])
+
+    prepared =
+      Mix.Oasis.prepare_json_schema!(schema,
+        root_spec: root_spec,
+        entry_pointer: "#/paths/~1users/post/requestBody/content/application~1json/schema"
+      )
+
+    # (a) `components` is always retained, even when no surviving Schema Object
+    # references `#/components/schemas/...`.
+    assert Map.has_key?(prepared, "components")
+
+    # (b) Top-level OpenAPI document keys are dropped from the bundled schema.
+    for dropped <- ["info", "servers", "tags", "webhooks", "externalDocs", "paths", "openapi"] do
+      refute Map.has_key?(prepared, dropped),
+             "expected bundled schema to drop top-level OpenAPI key #{inspect(dropped)}, got keys: #{inspect(Map.keys(prepared))}"
+    end
+  end
+
   test "Mix.Oasis.new/2 invalid spec" do
     spec = %{
       "components" => %{
