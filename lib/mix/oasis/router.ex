@@ -414,51 +414,47 @@ defmodule Mix.Oasis.Router do
   defp may_inject_plug_parsers(router), do: router
 
   defp inject_plug_parsers(content) do
-    opts = [
-      parsers: MapSet.new(),
+    init_map = %{
+      parsers: [],
       pass: ["*/*"],
       body_reader: {Oasis.CacheRawBodyReader, :read_body, []}
-    ]
+    }
 
-    opts =
-      Enum.reduce(content, opts, fn {content_type, _}, opts ->
-        map_plug_parsers(content_type, opts)
+    map =
+      Enum.reduce(content, init_map, fn {content_type, _}, acc ->
+        update_in_plug_parsers(content_type, acc)
       end)
 
-    parsers = MapSet.to_list(opts[:parsers])
-
-    if parsers == [] do
+    if Enum.empty?(map.parsers) do
       nil
     else
-      opts = Keyword.put(opts, :parsers, parsers)
+      opts =
+        map
+        |> update_in([:parsers], &(&1 |> MapSet.new() |> MapSet.to_list()))
+        |> Map.to_list()
       ~s|plug(\nPlug.Parsers, #{inspect(opts)})|
     end
   end
 
-  defp map_plug_parsers("application/x-www-form-urlencoded" <> _, acc) do
-    parsers = MapSet.put(acc[:parsers], :urlencoded)
-    Keyword.put(acc, :parsers, parsers)
+  defp update_in_plug_parsers("application/x-www-form-urlencoded" <> _, map) do
+    update_in(map[:parsers], &([:urlencoded] ++ &1))
   end
 
-  defp map_plug_parsers("multipart/form-data" <> _, acc) do
-    parsers = MapSet.put(acc[:parsers], :multipart)
-    Keyword.put(acc, :parsers, parsers)
+  defp update_in_plug_parsers("multipart/form-data" <> _, map) do
+    update_in(map[:parsers], &([:multipart] ++ &1))
   end
 
-  defp map_plug_parsers("multipart/mixed" <> _, acc) do
-    parsers = MapSet.put(acc[:parsers], :multipart)
-    Keyword.put(acc, :parsers, parsers)
+  defp update_in_plug_parsers("multipart/mixed" <> _, map) do
+    update_in(map[:parsers], &([:multipart] ++ &1))
   end
 
-  defp map_plug_parsers("application/json" <> _, acc) do
-    parsers = MapSet.put(acc[:parsers], :json)
-
-    acc
-    |> Keyword.put(:parsers, parsers)
-    |> Keyword.put(:json_decoder, Jason)
+  defp update_in_plug_parsers("application/json" <> _, map) do
+    map
+    |> update_in([:parsers], &([:json] ++ &1))
+    |> Map.put(:json_decoder, Jason)
   end
 
-  defp map_plug_parsers(_, acc), do: acc
+  defp update_in_plug_parsers(_, map), do: map
 
   defp may_inject_request_validator(apps, %{body_schema: body_schema} = router)
        when is_map(body_schema) do
