@@ -28,6 +28,131 @@ defmodule Oasis.ValidatorTest do
     end
   end
 
+  describe "JSONSchemaValidationFailed.path JSON Pointer format" do
+    # These tests pin the JSON Pointer (RFC 6901) format used in
+    # `JSONSchemaValidationFailed.path`:
+    #
+    #   * empty path → "#"
+    #   * non-empty path → "#/" + "/"-joined segments
+    #   * `~` in a segment → escaped as `~0`
+    #   * `/` in a segment → escaped as `~1`
+    #   * `required` rule errors carry the path of the *containing* object,
+    #     not the missing property
+    #
+    # The encoder lives in `Oasis.Validator.path_pointer/1`; we exercise it
+    # end-to-end through `parse_and_validate!/4` so the contract is observable
+    # at the public boundary.
+
+    test "empty path renders as '#' (root-level required failure)" do
+      param = %{
+        "required" => true,
+        "schema" =>
+          Oasis.Test.JSONSchema.compile!(%{
+            "type" => "object",
+            "required" => ["name"],
+            "properties" => %{"name" => %{"type" => "string"}}
+          })
+      }
+
+      assert %Oasis.BadRequestError.JSONSchemaValidationFailed{path: "#"} =
+               capture_validation_error(param, "body", "user", %{})
+    end
+
+    test "nested required failure points to the containing object's path" do
+      param = %{
+        "required" => true,
+        "schema" =>
+          Oasis.Test.JSONSchema.compile!(%{
+            "type" => "object",
+            "properties" => %{
+              "user" => %{
+                "type" => "object",
+                "required" => ["name"],
+                "properties" => %{"name" => %{"type" => "string"}}
+              }
+            },
+            "required" => ["user"]
+          })
+      }
+
+      assert %Oasis.BadRequestError.JSONSchemaValidationFailed{
+               error: %JSONSchex.Types.Error{rule: :required},
+               path: "#/user"
+             } = capture_validation_error(param, "body", "payload", %{"user" => %{}})
+    end
+
+    test "`/` in a property name is escaped as `~1`" do
+      param = %{
+        "required" => true,
+        "schema" =>
+          Oasis.Test.JSONSchema.compile!(%{
+            "type" => "object",
+            "properties" => %{
+              "a/b" => %{"type" => "string", "minLength" => 5}
+            }
+          })
+      }
+
+      assert %Oasis.BadRequestError.JSONSchemaValidationFailed{path: "#/a~1b"} =
+               capture_validation_error(param, "body", "payload", %{"a/b" => "x"})
+    end
+
+    test "`~` in a property name is escaped as `~0`" do
+      param = %{
+        "required" => true,
+        "schema" =>
+          Oasis.Test.JSONSchema.compile!(%{
+            "type" => "object",
+            "properties" => %{
+              "c~d" => %{"type" => "string", "minLength" => 5}
+            }
+          })
+      }
+
+      assert %Oasis.BadRequestError.JSONSchemaValidationFailed{path: "#/c~0d"} =
+               capture_validation_error(param, "body", "payload", %{"c~d" => "x"})
+    end
+
+    test "both `~` and `/` are escaped in the same segment (order: ~ first)" do
+      # RFC 6901 mandates `~` be escaped before `/`, otherwise an existing `~1`
+      # in the source name would be ambiguously decoded.
+      param = %{
+        "required" => true,
+        "schema" =>
+          Oasis.Test.JSONSchema.compile!(%{
+            "type" => "object",
+            "properties" => %{
+              "~/odd" => %{"type" => "string", "minLength" => 5}
+            }
+          })
+      }
+
+      assert %Oasis.BadRequestError.JSONSchemaValidationFailed{path: "#/~0~1odd"} =
+               capture_validation_error(param, "body", "payload", %{"~/odd" => "x"})
+    end
+
+    test "array indices appear as integer segments without escaping" do
+      param = %{
+        "required" => true,
+        "schema" =>
+          Oasis.Test.JSONSchema.compile!(%{
+            "type" => "array",
+            "items" => %{"type" => "string", "minLength" => 5}
+          })
+      }
+
+      assert %Oasis.BadRequestError.JSONSchemaValidationFailed{path: "#/1"} =
+               capture_validation_error(param, "body", "payload", ["hello", "x"])
+    end
+  end
+
+  defp capture_validation_error(param, use_in, name, value) do
+    Validator.parse_and_validate!(param, use_in, name, value)
+    flunk("expected Oasis.BadRequestError")
+  rescue
+    error in Oasis.BadRequestError -> error.error
+  end
+
   test "simple type integer" do
     param = %{
       "required" => true,

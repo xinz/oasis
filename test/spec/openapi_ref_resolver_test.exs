@@ -115,6 +115,64 @@ defmodule Oasis.Spec.OpenAPIRefResolverTest do
            }
   end
 
+  test "preserves Schema Object `$ref` with sibling fields untouched" do
+    # The OpenAPI Reference Object spec (3.0) ignored siblings of `$ref`, but the
+    # *Schema Object* `$ref` (which is JSON Schema, not an OpenAPI Reference
+    # Object) is a different beast: in OAS 3.1 / JSON Schema 2020-12 it lives
+    # alongside `description`, `title`, `nullable`, validation keywords, etc.
+    #
+    # The architectural boundary requires this resolver to NEVER touch Schema
+    # Object `$ref`s — they are JSONSchex's responsibility. This test pins
+    # that contract: both the `$ref` and its siblings survive verbatim.
+    {:ok, document} =
+      YamlElixir.read_from_string("""
+      components:
+        schemas:
+          Pet:
+            type: object
+            properties:
+              name:
+                type: string
+          PetWithSiblings:
+            $ref: "#/components/schemas/Pet"
+            description: "A Pet, but with extra prose"
+            title: "Decorated Pet"
+      paths:
+        /pets:
+          post:
+            requestBody:
+              required: true
+              content:
+                application/json:
+                  schema:
+                    $ref: "#/components/schemas/PetWithSiblings"
+                    description: "Inline sibling on a Schema Object ref"
+                    nullable: true
+      """)
+
+    resolved = Oasis.Spec.OpenAPIRefResolver.resolve(document)
+
+    assert get_in(resolved, ["components", "schemas", "PetWithSiblings"]) == %{
+             "$ref" => "#/components/schemas/Pet",
+             "description" => "A Pet, but with extra prose",
+             "title" => "Decorated Pet"
+           }
+
+    assert get_in(resolved, [
+             "paths",
+             "/pets",
+             "post",
+             "requestBody",
+             "content",
+             "application/json",
+             "schema"
+           ]) == %{
+             "$ref" => "#/components/schemas/PetWithSiblings",
+             "description" => "Inline sibling on a Schema Object ref",
+             "nullable" => true
+           }
+  end
+
   test "raises for non-string ref values" do
     assert_raise Oasis.InvalidSpecError, ~r/Expect `\$ref` value to be a string/, fn ->
       OpenAPIRefResolver.resolve(%{

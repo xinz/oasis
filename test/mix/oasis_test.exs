@@ -93,8 +93,42 @@ defmodule Mix.OasisTest do
     refute Map.has_key?(schema, "paths")
     refute Map.has_key?(schema, "openapi")
 
+    # Depth-1 (sanity, original coverage).
     assert valid_schema?(schema, %{"name" => "root", "next" => %{"name" => "child"}})
     assert valid_schema?(schema, %{"next" => %{"name" => "child"}}) == false
+
+    # Depth-3+ traversal. If the recursive `$ref` were silently inlined (rather
+    # than compiled as a true cyclic graph), validation would either succeed
+    # spuriously past the inlined depth or crash. This asserts the recursion
+    # holds across multiple levels.
+    deep_valid = %{
+      "name" => "l0",
+      "next" => %{
+        "name" => "l1",
+        "next" => %{
+          "name" => "l2",
+          "next" => %{"name" => "l3"}
+        }
+      }
+    }
+
+    assert valid_schema?(schema, deep_valid)
+
+    # Negative: at depth-3 the innermost `Node` is missing its required `name`.
+    # A correctly compiled cyclic schema must still apply the `required: [name]`
+    # constraint to that level.
+    deep_invalid = %{
+      "name" => "l0",
+      "next" => %{
+        "name" => "l1",
+        "next" => %{
+          "name" => "l2",
+          "next" => %{"next" => %{"name" => "l4"}}
+        }
+      }
+    }
+
+    refute valid_schema?(schema, deep_invalid)
   end
 
   test "Mix.Oasis.new/2 resolves external OpenAPI refs and keeps schema validation working" do
