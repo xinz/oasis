@@ -275,20 +275,20 @@ JSONSchex tests should cover schema graph semantics directly:
 Resolved for the first Oasis integration:
 
 1. Oasis uses `JSONSchex.bundle_fragment/2` during generation and emits `JSONSchex.Schema.compile!/2` over standalone bundled schemas. This keeps generated code compact and avoids embedding the full OpenAPI document in every generated module.
-2. Oasis includes `loader: &Oasis.Spec.Document.load_external/1` only as a fallback when bundling without a loader fails, so self-contained schemas do not carry a loader.
+2. Oasis resolves a single `:loader` up front for every `JSONSchex.bundle_fragment/2` call (default `&Oasis.Spec.Document.load_external/1`). JSONSchex only invokes the loader when an unresolved external `$ref` is actually reached, so self-contained schemas pay no behavioral cost. Callers can override with `:loader` or pass `loader: nil` to disable external loading explicitly. The earlier "try without a loader, then retry with one" fallback was removed because it could mask the original (often structural) error.
 3. Oasis does not normalize OpenAPI 3.1/3.2 Schema Objects before handing them to JSONSchex. JSONSchex is the owner of JSON Schema Draft 2020-12 semantics and compatibility handling such as `dependencies`.
 
 Resolved for the follow-up Oasis integration:
 
 1. Schema generation diagnostics now include entry pointer/ref and base URI context when JSONSchex bundling or precheck compilation fails.
 2. Library callers can pass a custom JSONSchex-compatible `:loader` through Oasis generation options. The mix task continues to use the default local YAML/JSON loader.
-3. Runtime JSON Schema validation errors now carry Oasis source metadata when generated schemas include it, allowing handlers to inspect the OpenAPI entry pointer, path, method, parameter, or media type that produced the schema.
-4. Oasis compacts bundled standalone schemas by keeping known JSON Schema document keywords plus the OpenAPI `components` context needed by preserved component refs, instead of dropping a fixed list of OpenAPI fields.
+3. OpenAPI source metadata is exposed at **generation time only**, as the public `:source_meta` field on `%Mix.Oasis.Router{}`. It identifies each extracted schema structurally (`path`, `http_verb`, `parameter_location`/`parameter_name` for parameters; `content_type` for bodies) using the user's original OpenAPI URL shape. Runtime JSON Schema validation errors deliberately do **not** carry this metadata: route/parameter context is already available via `Plug.Conn` plus `Oasis.BadRequestError`'s `:use_in` / `:param_name`, and deep-links into the OpenAPI document are a tooling concern, not a runtime one.
+4. Oasis compacts bundled standalone schemas by keeping known JSON Schema document keywords plus the OpenAPI `components` context. `components` is retained unconditionally for simplicity: conditional retention would require a full bundled-graph scan for `$ref`s into `#/components/...`, which adds non-trivial complexity for no observable behavioral benefit (JSONSchex tolerates unreferenced sibling keys, and OpenAPI documents typically already have `components`).
 
 Still open:
 
 1. Whether to expose custom loader/search-root configuration through a future public mix task option.
-2. Whether to expand runtime source metadata beyond entry pointer and operation context, for example to include line/column data from YAML parsers.
+2. Whether to expose YAML/JSON line/column data from `Oasis.Spec.Document.load*` on `Mix.Oasis.Router.source_meta` for richer downstream tooling (currently only structural OpenAPI fields are exposed, not source-text positions).
 
 ## Recommendation
 

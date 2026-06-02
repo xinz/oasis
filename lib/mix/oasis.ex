@@ -67,6 +67,13 @@ defmodule Mix.Oasis do
     "examples"
   ]
 
+  # OpenAPI keywords that may carry referenced context inside a bundled
+  # standalone schema. `components` is retained unconditionally rather than
+  # scanning the bundled graph for `$ref`s pointing into `#/components/...`:
+  # the scan would add non-trivial complexity for no observable behavioral
+  # benefit (JSONSchex tolerates unreferenced sibling keys, and OpenAPI
+  # documents typically already include `components`). See RFC 0001
+  # "Resolved follow-up #4".
   @bundled_schema_context_keywords [
     "components"
   ]
