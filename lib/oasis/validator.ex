@@ -11,26 +11,18 @@ defmodule Oasis.Validator do
         ) :: term()
   def parse_and_validate!(%{"schema" => _schema} = definition, use_in, name, value) do
     definition
-    |> prepare()
     |> check_required!(use_in, name, value)
     |> process()
   end
 
   def parse_and_validate!(%{"content" => _content} = definition, use_in, name, value) do
     definition
-    |> prepare()
     |> check_required!(use_in, name, value)
     |> process()
   end
 
   def parse_and_validate!(_, _, _, value) do
     value
-  end
-
-  defp prepare(definition) when is_map(definition) do
-    required = if definition["required"] == true, do: true, else: false
-
-    Map.put(definition, "required", required)
   end
 
   defp check_required!(%{"required" => true}, use_in, param_name, nil) do
