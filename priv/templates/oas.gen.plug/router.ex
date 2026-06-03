@@ -1,7 +1,7 @@
 defmodule <%= inspect context.module_name %> do
   # NOTICE: This module is generated when run `mix oas.gen.plug` task command with the OpenAPI Specification file.
   use Oasis.Router
-  require JSONSchex.Schema
+  <%= if Enum.any?(context.routers, & &1.schema_compile_required?) do %>require JSONSchex.Schema<% end %>
 
   plug(:match)
   plug(:dispatch)

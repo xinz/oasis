@@ -3,7 +3,7 @@ defmodule <%= inspect context.module_name %> do
   # run `mix oas.gen.plug` task command with the OpenAPI Specification file.
   use Oasis.Controller
   use Plug.ErrorHandler
-  require JSONSchex.Schema
+  <%= if context.schema_compile_required? do %>require JSONSchex.Schema<% end %>
   
   <%= context.plug_parsers %>
 

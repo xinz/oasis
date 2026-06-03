@@ -171,6 +171,525 @@ defmodule Mix.OasisTest do
              Map.fetch!(operation, "parameters")
   end
 
+  describe "render_embedded_schemas/1" do
+    # Helper: eval the rendered source back into runtime data.
+    # The rendered source contains `JSONSchex.Schema.compile!/2` macro calls,
+    # so we prepend `require JSONSchex.Schema` before evaluating.
+    defp eval_rendered(rendered) do
+      {value, _binding} = Code.eval_string("require JSONSchex.Schema; " <> rendered)
+      value
+    end
+
+    test "escapes scalar values as data literals" do
+      assert Mix.Oasis.render_embedded_schemas("hello") == "\"hello\""
+      assert Mix.Oasis.render_embedded_schemas(42) == "42"
+      assert Mix.Oasis.render_embedded_schemas(nil) == "nil"
+      assert Mix.Oasis.render_embedded_schemas(:foo) == ":foo"
+      assert Mix.Oasis.render_embedded_schemas(true) == "true"
+    end
+
+    test "renders a plain map (without a \"schema\" key) as a map literal" do
+      rendered = Mix.Oasis.render_embedded_schemas(%{"name" => "users", "in" => "query"})
+
+      # The rendered string must be valid Elixir source for a map literal
+      # with the original key/value pairs preserved as data.
+      assert eval_rendered(rendered) == %{"name" => "users", "in" => "query"}
+      refute rendered =~ "JSONSchex.Schema.compile!"
+    end
+
+    test "sorts map keys deterministically so generated output is stable" do
+      rendered_a =
+        Mix.Oasis.render_embedded_schemas(%{"b" => 1, "a" => 2, "c" => 3})
+
+      rendered_b =
+        Mix.Oasis.render_embedded_schemas(%{"c" => 3, "a" => 2, "b" => 1})
+
+      assert rendered_a == rendered_b
+      # And the rendered order matches the sorted-by-key order.
+      assert rendered_a =~ ~r/"a" => 2.*"b" => 1.*"c" => 3/s
+    end
+
+    test "renders a map with a \"schema\" map value through JSONSchex.Schema.compile!/2" do
+      param = %{
+        "name" => "id",
+        "in" => "path",
+        "required" => true,
+        "schema" => %{"type" => "integer", "minimum" => 1}
+      }
+
+      rendered = Mix.Oasis.render_embedded_schemas(param)
+
+      assert rendered =~ "JSONSchex.Schema.compile!"
+
+      result = eval_rendered(rendered)
+
+      assert %{"name" => "id", "in" => "path", "required" => true, "schema" => compiled} =
+               result
+
+      assert %JSONSchex.Types.Schema{} = compiled
+      assert JSONSchex.validate(compiled, 5) == :ok
+      assert {:error, _} = JSONSchex.validate(compiled, 0)
+      assert {:error, _} = JSONSchex.validate(compiled, "not an integer")
+    end
+
+    test "renders a map with a boolean \"schema\" value through JSONSchex.Schema.compile!/2" do
+      rendered = Mix.Oasis.render_embedded_schemas(%{"schema" => true})
+
+      assert rendered =~ "JSONSchex.Schema.compile!"
+
+      %{"schema" => compiled} = eval_rendered(rendered)
+
+      assert %JSONSchex.Types.Schema{} = compiled
+      # `true` schema accepts anything.
+      assert JSONSchex.validate(compiled, 1) == :ok
+      assert JSONSchex.validate(compiled, "anything") == :ok
+    end
+
+    test "renders a map with a \"false\" schema value as a schema that rejects everything" do
+      rendered = Mix.Oasis.render_embedded_schemas(%{"schema" => false})
+
+      %{"schema" => compiled} = eval_rendered(rendered)
+
+      assert %JSONSchex.Types.Schema{} = compiled
+      assert {:error, _} = JSONSchex.validate(compiled, 1)
+      assert {:error, _} = JSONSchex.validate(compiled, nil)
+    end
+
+    test "raises ArgumentError when a \"schema\" value is neither map, boolean, nor compiled schema" do
+      assert_raise ArgumentError, ~r/expected nested "schema" value/, fn ->
+        Mix.Oasis.render_embedded_schemas(%{"schema" => "not a schema"})
+      end
+    end
+
+    test "renders a top-level %JSONSchex.Types.Schema{} using its own compile options" do
+      raw = %{"type" => "string"}
+
+      {:ok, compiled} =
+        JSONSchex.compile(raw, format_assertion: true, content_assertion: false)
+
+      rendered = Mix.Oasis.render_embedded_schemas(compiled)
+
+      assert rendered =~ "JSONSchex.Schema.compile!"
+      # Compile options round-tripped from the source schema.
+      assert rendered =~ "format_assertion: true"
+      assert rendered =~ "content_assertion: false"
+
+      recompiled = eval_rendered(rendered)
+      assert %JSONSchex.Types.Schema{} = recompiled
+      assert JSONSchex.validate(recompiled, "hi") == :ok
+      assert {:error, _} = JSONSchex.validate(recompiled, 1)
+    end
+
+    test "renders a nested \"schema\" %JSONSchex.Types.Schema{} value using its own compile options" do
+      raw = %{"type" => "integer", "minimum" => 0}
+
+      {:ok, compiled} =
+        JSONSchex.compile(raw, format_assertion: true, content_assertion: false)
+
+      rendered =
+        Mix.Oasis.render_embedded_schemas(%{"name" => "age", "schema" => compiled})
+
+      %{"name" => "age", "schema" => recompiled} = eval_rendered(rendered)
+
+      assert %JSONSchex.Types.Schema{} = recompiled
+      assert JSONSchex.validate(recompiled, 1) == :ok
+      assert {:error, _} = JSONSchex.validate(recompiled, -1)
+    end
+
+    test "recurses into lists and preserves order" do
+      params = [
+        %{"name" => "a", "schema" => %{"type" => "string"}},
+        %{"name" => "b", "schema" => %{"type" => "integer"}}
+      ]
+
+      rendered = Mix.Oasis.render_embedded_schemas(params)
+
+      [first, second] = eval_rendered(rendered)
+
+      assert %{"name" => "a", "schema" => %JSONSchex.Types.Schema{} = s1} = first
+      assert %{"name" => "b", "schema" => %JSONSchex.Types.Schema{} = s2} = second
+
+      assert JSONSchex.validate(s1, "ok") == :ok
+      assert {:error, _} = JSONSchex.validate(s1, 1)
+      assert JSONSchex.validate(s2, 1) == :ok
+      assert {:error, _} = JSONSchex.validate(s2, "nope")
+    end
+
+    test "recurses into tuples" do
+      rendered =
+        Mix.Oasis.render_embedded_schemas(
+          {"query", %{"schema" => %{"type" => "integer"}}}
+        )
+
+      assert {"query", %{"schema" => %JSONSchex.Types.Schema{} = compiled}} =
+               eval_rendered(rendered)
+
+      assert JSONSchex.validate(compiled, 7) == :ok
+      assert {:error, _} = JSONSchex.validate(compiled, "nope")
+    end
+
+    test "renders a router-shaped container with mixed parameter and body schemas" do
+      container = %{
+        "query" => %{
+          "page" => %{
+            "name" => "page",
+            "in" => "query",
+            "schema" => %{"type" => "integer", "minimum" => 1}
+          }
+        },
+        "body" => %{
+          "application/json" => %{
+            "schema" => %{
+              "type" => "object",
+              "required" => ["name"],
+              "properties" => %{"name" => %{"type" => "string"}}
+            }
+          }
+        }
+      }
+
+      rendered = Mix.Oasis.render_embedded_schemas(container)
+      result = eval_rendered(rendered)
+
+      assert %{
+               "query" => %{
+                 "page" => %{
+                   "name" => "page",
+                   "in" => "query",
+                   "schema" => %JSONSchex.Types.Schema{} = page_schema
+                 }
+               },
+               "body" => %{
+                 "application/json" => %{"schema" => %JSONSchex.Types.Schema{} = body_schema}
+               }
+             } = result
+
+      assert JSONSchex.validate(page_schema, 1) == :ok
+      assert {:error, _} = JSONSchex.validate(page_schema, 0)
+
+      assert JSONSchex.validate(body_schema, %{"name" => "x"}) == :ok
+      assert {:error, _} = JSONSchex.validate(body_schema, %{})
+    end
+  end
+
+  describe ":schema_compile_required? on %Mix.Oasis.Router{}" do
+    test "defaults to false on a freshly constructed struct" do
+      router = %Mix.Oasis.Router{}
+      assert router.schema_compile_required? == false
+    end
+
+    test "is set to true when an operation has a body schema with `schema` keys" do
+      file_path = Path.expand("tasks/file/jsonschex_boundary/external_schema.yaml", __DIR__)
+      document = Oasis.Spec.read(file_path)
+
+      router =
+        document
+        |> Mix.Oasis.new([])
+        |> pre_plug_router("createUser")
+
+      assert router.schema_compile_required? == true
+    end
+
+    test "is set to true when an operation has only path parameters" do
+      operation = %{
+        "operationId" => "getThing",
+        "parameters" => %{
+          "path" => [
+            %{
+              "name" => "id",
+              "required" => true,
+              "schema" => %{"type" => "integer"}
+            }
+          ]
+        }
+      }
+
+      paths_spec = %{"paths" => %{"/things" => %{"get" => operation}}}
+
+      router =
+        paths_spec
+        |> Mix.Oasis.new([])
+        |> pre_plug_router("getThing")
+
+      assert router.path_schema != nil
+      assert router.schema_compile_required? == true
+    end
+
+    test "is set to false when an operation has no schemas at all" do
+      operation = %{"operationId" => "getHealth"}
+      paths_spec = %{"paths" => %{"/health" => %{"get" => operation}}}
+
+      router =
+        paths_spec
+        |> Mix.Oasis.new([])
+        |> pre_plug_router("getHealth")
+
+      assert router.path_schema == nil
+      assert router.body_schema == nil
+      assert router.query_schema == nil
+      assert router.header_schema == nil
+      assert router.cookie_schema == nil
+      assert router.schema_compile_required? == false
+    end
+
+    # Helper: build a single-operation paths_spec from `parameters` and an
+    # optional `request_body`, then run it through `Mix.Oasis.new/2` and return
+    # the resolved router struct for `operation_id`.
+    defp router_from_inline_spec(operation_id, parameters, request_body \\ nil) do
+      operation =
+        %{"operationId" => operation_id}
+        |> maybe_put("parameters", parameters)
+        |> maybe_put("requestBody", request_body)
+
+      paths_spec = %{"paths" => %{"/" <> operation_id => %{"get" => operation}}}
+
+      paths_spec
+      |> Mix.Oasis.new([])
+      |> pre_plug_router(operation_id)
+    end
+
+    defp maybe_put(map, _key, nil), do: map
+    defp maybe_put(map, key, value), do: Map.put(map, key, value)
+
+    test "is set to true when an operation has only query parameters" do
+      router =
+        router_from_inline_spec("listThings", %{
+          "query" => [%{"name" => "page", "schema" => %{"type" => "integer"}}]
+        })
+
+      assert router.query_schema != nil
+      assert router.path_schema == nil
+      assert router.schema_compile_required? == true
+    end
+
+    test "is set to true when an operation has only header parameters" do
+      router =
+        router_from_inline_spec("headerOnly", %{
+          "header" => [%{"name" => "X-Trace", "schema" => %{"type" => "string"}}]
+        })
+
+      assert router.header_schema != nil
+      assert router.schema_compile_required? == true
+    end
+
+    test "is set to true when an operation has only cookie parameters" do
+      router =
+        router_from_inline_spec("cookieOnly", %{
+          "cookie" => [%{"name" => "session", "schema" => %{"type" => "string"}}]
+        })
+
+      assert router.cookie_schema != nil
+      assert router.schema_compile_required? == true
+    end
+
+    test "is set to true when multiple parameter locations and a body are all present" do
+      request_body = %{
+        "required" => true,
+        "content" => %{
+          "application/json" => %{
+            "schema" => %{
+              "type" => "object",
+              "required" => ["name"],
+              "properties" => %{"name" => %{"type" => "string"}}
+            }
+          }
+        }
+      }
+
+      parameters = %{
+        "query" => [%{"name" => "page", "schema" => %{"type" => "integer"}}],
+        "header" => [%{"name" => "X-Trace", "schema" => %{"type" => "string"}}]
+      }
+
+      router = router_from_inline_spec("combined", parameters, request_body)
+
+      assert router.query_schema != nil
+      assert router.header_schema != nil
+      assert router.body_schema != nil
+      assert router.schema_compile_required? == true
+    end
+
+    test "remains false when parameters are present but every entry is skipped (missing `name`/`schema`)" do
+      parameters = %{
+        "query" => [
+          %{"schema" => %{"type" => "integer"}, "required" => false},
+          %{"name" => "only_name", "required" => true}
+        ]
+      }
+
+      router = router_from_inline_spec("skipped", parameters)
+
+      assert router.query_schema == nil
+      assert router.schema_compile_required? == false
+    end
+
+    test "remains false when request body has no `schema` in any media type" do
+      request_body = %{
+        "required" => true,
+        "content" => %{
+          "application/octet-stream" => %{}
+        }
+      }
+
+      router = router_from_inline_spec("binary", nil, request_body)
+
+      assert router.body_schema == nil
+      assert router.schema_compile_required? == false
+    end
+
+    test "structural invariant: schema_compile_required? iff any *_schema field is non-nil" do
+      # Property: across all routers produced by `Mix.Oasis.new/2`, the
+      # `:schema_compile_required?` flag is equivalent to "at least one of
+      # path/body/query/header/cookie schema is non-nil". This guards against
+      # future regressions where a new `to_schema_opt/3` clause is added but
+      # forgets to pipe through `put_schema_compile_required_if_not_marked/1`,
+      # or a new schema-bearing branch in `merge_*` forgets to flip the flag.
+      cases = [
+        {"q", %{"query" => [%{"name" => "a", "schema" => %{"type" => "string"}}]}, nil},
+        {"h", %{"header" => [%{"name" => "X", "schema" => %{"type" => "string"}}]}, nil},
+        {"c", %{"cookie" => [%{"name" => "s", "schema" => %{"type" => "string"}}]}, nil},
+        {"p", %{"path" => [%{"name" => "id", "schema" => %{"type" => "integer"}}]}, nil},
+        {"b", nil,
+         %{
+           "content" => %{
+             "application/json" => %{"schema" => %{"type" => "object"}}
+           }
+         }},
+        {"none", nil, nil}
+      ]
+
+      for {op_id, parameters, request_body} <- cases do
+        router = router_from_inline_spec(op_id, parameters, request_body)
+
+        any_schema? =
+          [
+            router.path_schema,
+            router.body_schema,
+            router.query_schema,
+            router.header_schema,
+            router.cookie_schema
+          ]
+          |> Enum.any?(&(&1 != nil))
+
+        assert router.schema_compile_required? == any_schema?,
+               """
+               invariant violated for #{op_id}:
+                 schema_compile_required? = #{inspect(router.schema_compile_required?)}
+                 path_schema    = #{inspect(router.path_schema)}
+                 body_schema    = #{inspect(router.body_schema)}
+                 query_schema   = #{inspect(router.query_schema)}
+                 header_schema  = #{inspect(router.header_schema)}
+                 cookie_schema  = #{inspect(router.cookie_schema)}
+               """
+      end
+    end
+  end
+
+  describe "router.ex / pre_plug.ex template rendering of `require JSONSchex.Schema`" do
+    @router_template_path Path.expand(
+                            "../../priv/templates/oas.gen.plug/router.ex",
+                            __DIR__
+                          )
+
+    @pre_plug_template_path Path.expand(
+                              "../../priv/templates/oas.gen.plug/pre_plug.ex",
+                              __DIR__
+                            )
+
+    defp render_router_template(routers) do
+      template = File.read!(@router_template_path)
+      context = %{module_name: SomeApp.Router, routers: routers}
+
+      template
+      |> EEx.eval_string(context: context)
+      |> Code.format_string!()
+      |> IO.iodata_to_binary()
+    end
+
+    defp render_pre_plug_template(router) do
+      template = File.read!(@pre_plug_template_path)
+      # `pre_plug.ex` receives the router struct as `context` (with
+      # `:module_name` added on top), so mirror that here.
+      context = Map.put(router, :module_name, SomeApp.PrePlug)
+
+      template
+      |> EEx.eval_string(context: context)
+      |> Code.format_string!()
+      |> IO.iodata_to_binary()
+    end
+
+    test "router.ex emits `require JSONSchex.Schema` iff any router has schema_compile_required? == true" do
+      without =
+        render_router_template([
+          %Mix.Oasis.Router{
+            http_verb: "get",
+            url: "/health",
+            schema_compile_required?: false,
+            pre_plug_module: SomeApp.PreGetHealth
+          }
+        ])
+
+      with_required =
+        render_router_template([
+          %Mix.Oasis.Router{
+            http_verb: "get",
+            url: "/users/:id",
+            path_schema: %{"id" => %{"schema" => %{"type" => "integer"}}},
+            schema_compile_required?: true,
+            pre_plug_module: SomeApp.PreGetUsersId
+          }
+        ])
+
+      refute without =~ "require JSONSchex.Schema"
+      assert with_required =~ "require JSONSchex.Schema"
+
+      assert {:ok, _} = Code.string_to_quoted(without)
+      assert {:ok, _} = Code.string_to_quoted(with_required)
+    end
+
+    test "router.ex aggregates schema_compile_required? across all routers (Enum.any?)" do
+      mixed = [
+        %Mix.Oasis.Router{
+          http_verb: "get",
+          url: "/health",
+          schema_compile_required?: false,
+          pre_plug_module: SomeApp.PreGetHealth
+        },
+        %Mix.Oasis.Router{
+          http_verb: "get",
+          url: "/users/:id",
+          path_schema: %{"id" => %{"schema" => %{"type" => "integer"}}},
+          schema_compile_required?: true,
+          pre_plug_module: SomeApp.PreGetUsersId
+        }
+      ]
+
+      out = render_router_template(mixed)
+      assert out =~ "require JSONSchex.Schema"
+      assert {:ok, _} = Code.string_to_quoted(out)
+    end
+
+    test "pre_plug.ex emits `require JSONSchex.Schema` iff context.schema_compile_required? is true" do
+      base = %Mix.Oasis.Router{
+        http_verb: "get",
+        url: "/x",
+        plug_module: SomeApp.Plug,
+        plug_parsers: "",
+        request_validator: "",
+        security: nil
+      }
+
+      out_without = render_pre_plug_template(%{base | schema_compile_required?: false})
+      out_with = render_pre_plug_template(%{base | schema_compile_required?: true})
+
+      refute out_without =~ "require JSONSchex.Schema"
+      assert out_with =~ "require JSONSchex.Schema"
+
+      assert {:ok, _} = Code.string_to_quoted(out_without)
+      assert {:ok, _} = Code.string_to_quoted(out_with)
+    end
+  end
+
   test "generated pre_plug schema literals contain no x-oasis-source key" do
     file_path = Path.expand("tasks/file/jsonschex_boundary/external_schema.yaml", __DIR__)
     document = Oasis.Spec.read(file_path)

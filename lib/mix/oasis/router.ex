@@ -65,6 +65,7 @@ defmodule Mix.Oasis.Router do
     :request_validator,
     :plug_parsers,
     :security,
+    schema_compile_required?: false,
     source_meta: %{}
   ]
 
@@ -186,7 +187,7 @@ defmodule Mix.Oasis.Router do
   defp merge_parameters_to_operation(%{"parameters" => parameters} = operation, opts) do
     {router, source_meta} =
       @check_parameter_fields
-      |> Enum.reduce({%{}, %{}}, fn location, {router_acc, source_meta_acc} ->
+      |> Enum.reduce({%{schema_compile_required?: false}, %{}}, fn location, {router_acc, source_meta_acc} ->
         parameters_to_location = Map.get(parameters, location)
 
         {params_to_schema, params_to_meta} =
@@ -236,6 +237,7 @@ defmodule Mix.Oasis.Router do
       router =
         router
         |> Map.put(:body_schema, put_required_if_exists(request_body, %{"content" => content}))
+        |> Map.put(:schema_compile_required?, true)
         |> update_in([Access.key(:source_meta, %{})], &Map.put(&1, :body_schema, body_source_meta))
 
       {router, operation}
@@ -292,10 +294,17 @@ defmodule Mix.Oasis.Router do
     acc
   end
 
-  defp to_schema_opt(params, "query", acc), do: Map.put(acc, :query_schema, params)
-  defp to_schema_opt(params, "cookie", acc), do: Map.put(acc, :cookie_schema, params)
-  defp to_schema_opt(params, "header", acc), do: Map.put(acc, :header_schema, params)
-  defp to_schema_opt(params, "path", acc), do: Map.put(acc, :path_schema, params)
+  defp to_schema_opt(params, "query", acc),
+    do: acc |> Map.put(:query_schema, params) |> put_schema_compile_required_if_not_marked()
+  defp to_schema_opt(params, "cookie", acc),
+    do: acc |> Map.put(:cookie_schema, params) |> put_schema_compile_required_if_not_marked()
+  defp to_schema_opt(params, "header", acc),
+    do: acc |> Map.put(:header_schema, params) |> put_schema_compile_required_if_not_marked()
+  defp to_schema_opt(params, "path", acc),
+    do: acc |> Map.put(:path_schema, params) |> put_schema_compile_required_if_not_marked()
+
+  defp put_schema_compile_required_if_not_marked(%{schema_compile_required?: true} = acc), do: acc
+  defp put_schema_compile_required_if_not_marked(acc), do: Map.put(acc, :schema_compile_required?, true)
 
   defp to_source_meta_opt(nil, _, acc), do: acc
   defp to_source_meta_opt(meta, _, acc) when meta == %{}, do: acc
