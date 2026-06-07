@@ -178,7 +178,7 @@ Generated validators embed schemas with `JSONSchex.Schema.compile!/2`.
 Oasis distinguishes OpenAPI Reference Objects from JSON Schema `$ref` keywords:
 
 * OpenAPI Reference Objects needed for generation, such as Path Item, Parameter, Request Body, and Response refs, are resolved before router generation.
-* Schema Object `$ref` values are preserved and resolved by `jsonschex` through `JSONSchex.bundle_fragment/2` / `JSONSchex.compile_fragment/2`.
+* Schema Object `$ref` values are preserved and resolved by `jsonschex` through `JSONSchex.bundle_fragment/2`; generated modules then compile the bundled standalone schema with `JSONSchex.Schema.compile!/2`.
 
 This means external shared schema files and recursive schemas are handled by `jsonschex`, while Oasis keeps OpenAPI-specific traversal and code generation local to Oasis.
 

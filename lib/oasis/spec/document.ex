@@ -10,8 +10,7 @@ defmodule Oasis.Spec.Document do
   by:
 
   - `Oasis.Spec.OpenAPIRefResolver` when resolving external OpenAPI Reference Objects
-  - `JSONSchex.bundle_fragment/2` and `JSONSchex.compile_fragment/2` when schema
-    refs need relative file resolution
+  - `JSONSchex.bundle_fragment/2` when schema refs need relative file resolution
 
   External loading returns JSONSchex-compatible loader metadata with `:base_uri`
   so loaded files can resolve their own relative refs correctly.
@@ -118,8 +117,7 @@ defmodule Oasis.Spec.Document do
 
   ## Where it is used
 
-  - Default `:loader` for `JSONSchex.bundle_fragment/2` /
-    `JSONSchex.compile_fragment/2` calls inside
+  - Default `:loader` for `JSONSchex.bundle_fragment/2` calls inside
     `Mix.Oasis.prepare_json_schema!/2`.
   - Default `:loader` for `Oasis.Spec.OpenAPIRefResolver.resolve/2` when
     following external OpenAPI Reference Objects (e.g.

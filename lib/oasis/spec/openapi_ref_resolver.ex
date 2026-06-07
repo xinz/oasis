@@ -16,8 +16,8 @@ defmodule Oasis.Spec.OpenAPIRefResolver do
   and cycle detection.
 
   Schema Object `$ref` values are not selected here. They are preserved so
-  `JSONSchex.compile_fragment/2` or `JSONSchex.bundle_fragment/2` can resolve the
-  schema graph with proper JSON Schema Draft 2020-12 semantics.
+  `JSONSchex.bundle_fragment/2` can resolve the schema graph with proper JSON
+  Schema Draft 2020-12 semantics.
 
   ## Selection rules
 
