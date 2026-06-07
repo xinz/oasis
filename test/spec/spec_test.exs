@@ -60,7 +60,7 @@ defmodule Oasis.Spec.SpecTest do
 
     {:ok, compiled} =
       JSONSchex.compile_fragment(schema,
-        entry_pointer: "#/paths/~1refresh_token/post/requestBody/content/application~1json/schema",
+        entry: "#/paths/~1refresh_token/post/requestBody/content/application~1json/schema",
         base_uri: file_path,
         format_assertion: true,
         content_assertion: false

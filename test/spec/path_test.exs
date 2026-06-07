@@ -109,7 +109,7 @@ defmodule Oasis.Spec.PathTest do
 
     {:ok, compiled} =
       JSONSchex.compile_fragment(schema,
-        entry_pointer: "#/paths/~1page/get/parameters/query/0/content/application~1json/schema",
+        entry: "#/paths/~1page/get/parameters/query/0/content/application~1json/schema",
         format_assertion: true,
         content_assertion: false
       )
@@ -500,7 +500,7 @@ defmodule Oasis.Spec.PathTest do
 
     {:ok, compiled} =
       JSONSchex.compile_fragment(schema,
-        entry_pointer: "#/paths/~1refresh/post/requestBody/content/application~1json/schema",
+        entry: "#/paths/~1refresh/post/requestBody/content/application~1json/schema",
         format_assertion: true,
         content_assertion: false
       )

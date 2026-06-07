@@ -236,19 +236,18 @@ defmodule Mix.Oasis do
   @doc """
   Prepares a JSON Schema entrypoint for generated code.
 
-  When `:root_spec` and `:entry_pointer` are available, JSONSchex bundles the
-  fragment in its containing OpenAPI document context and returns a standalone
-  schema. Otherwise, the schema is treated as already standalone.
+  When `:root_spec` and `:entry` are available, JSONSchex bundles the fragment
+  in its containing OpenAPI document context and returns a standalone schema.
+  Otherwise, the schema is treated as already standalone.
 
   ## Options
 
   - `:root_spec` — the containing OpenAPI document map. Required together with
-    `:entry_pointer` (or `:entry_ref`) for fragment bundling. Without it, the
-    `schema` is assumed to be self-contained.
-  - `:entry_pointer` — JSON Pointer (string) into `:root_spec` identifying the
-    schema fragment to bundle (e.g. `"#/paths/~1users/post/requestBody/content/application~1json/schema"`).
-  - `:entry_ref` — alternative to `:entry_pointer`: a full `$ref`-style URI
-    pointing at the fragment. Forwarded to `JSONSchex.bundle_fragment/2`.
+    `:entry` for fragment bundling. Without it, the `schema` is assumed to be
+    self-contained.
+  - `:entry` — JSON Pointer or URI reference identifying the schema fragment to
+    bundle (e.g. `"#/paths/~1users/post/requestBody/content/application~1json/schema"`).
+    Forwarded to `JSONSchex.bundle_fragment/2`.
   - `:base_uri` — base URI used to resolve relative external refs inside
     `:root_spec`. Forwarded to `JSONSchex.bundle_fragment/2`.
   - `:loader` — external-resource loader. Defaults to
@@ -263,7 +262,7 @@ defmodule Mix.Oasis do
   at compile time.
 
   Raises `ArgumentError` if bundling or the compile precheck fails. Error
-  messages include the entry pointer/ref and base URI for diagnostics.
+  messages include the entry and base URI for diagnostics.
   """
   def prepare_json_schema!(schema, opts \\ []) when is_map(schema) or is_boolean(schema) do
     schema = bundle_schema_entrypoint(schema, opts)
@@ -273,8 +272,8 @@ defmodule Mix.Oasis do
     # `JSONSchex.Schema.compile!/2` at the call site's compile time.
     #
     # The precheck here exists purely to fail fast at `mix oas.gen.plug` time
-    # with a clear `ArgumentError` (carrying entry pointer / base URI context)
-    # instead of letting a malformed bundled schema surface later as a cryptic
+    # with a clear `ArgumentError` (carrying entry / base URI context) instead
+    # of letting a malformed bundled schema surface later as a cryptic
     # macro-expansion error inside the generated module's compilation.
     #
     # Do NOT "optimize" this away — the runtime compile is not redundant; it is
@@ -286,8 +285,8 @@ defmodule Mix.Oasis do
   end
 
   defp bundle_schema_entrypoint(schema, opts) do
-    case {Keyword.get(opts, :root_spec), Keyword.get(opts, :entry_pointer)} do
-      {%{} = root_spec, entry_pointer} when is_binary(entry_pointer) ->
+    case {Keyword.get(opts, :root_spec), Keyword.get(opts, :entry)} do
+      {%{} = root_spec, entry} when is_binary(entry) ->
         bundle_fragment!(root_spec, opts)
 
       _other ->
@@ -307,7 +306,7 @@ defmodule Mix.Oasis do
 
     fragment_opts =
       opts
-      |> fragment_options()
+      |> Keyword.take([:entry, :base_uri])
       |> Keyword.put(:loader, loader)
 
     case JSONSchex.bundle_fragment(root_spec, fragment_opts) do
@@ -324,17 +323,6 @@ defmodule Mix.Oasis do
   end
 
   defp compact_bundled_schema(schema), do: schema
-
-  defp fragment_options(opts) do
-    [:entry_pointer, :entry_ref, :base_uri]
-    |> Enum.reduce([], fn key, acc ->
-      case Keyword.fetch(opts, key) do
-        {:ok, nil} -> acc
-        {:ok, value} -> Keyword.put(acc, key, value)
-        :error -> acc
-      end
-    end)
-  end
 
   defp schema_container_to_ast(%JSONSchex.Types.Schema{} = schema) do
     compile_schema_ast(schema.raw, compile_options_from_compiled(schema))
@@ -413,7 +401,7 @@ defmodule Mix.Oasis do
     details =
       [
         "Failed to #{phase}: #{JSONSchex.format_error(error)}",
-        error_context_detail("entry", opts[:entry_pointer] || opts[:entry_ref]),
+        error_context_detail("entry", opts[:entry]),
         error_context_detail("base_uri", opts[:base_uri])
       ]
       |> Enum.reject(&is_nil/1)

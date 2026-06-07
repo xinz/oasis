@@ -734,7 +734,7 @@ defmodule Mix.OasisTest do
     prepared =
       Mix.Oasis.prepare_json_schema!(schema,
         root_spec: root_spec,
-        entry_pointer: "#/paths/~1users/post/requestBody/content/application~1json/schema",
+        entry: "#/paths/~1users/post/requestBody/content/application~1json/schema",
         base_uri: "/tmp/api/openapi.yaml",
         loader: loader
       )
@@ -750,7 +750,7 @@ defmodule Mix.OasisTest do
                  ~r(entry=#/paths/~1users/post/requestBody/content/application~1json/schema),
                  fn ->
                    Mix.Oasis.prepare_json_schema!(schema,
-                     entry_pointer: "#/paths/~1users/post/requestBody/content/application~1json/schema",
+                     entry: "#/paths/~1users/post/requestBody/content/application~1json/schema",
                      base_uri: "/tmp/api/openapi.yaml"
                    )
                  end
@@ -780,7 +780,7 @@ defmodule Mix.OasisTest do
     prepared =
       Mix.Oasis.prepare_json_schema!(schema,
         root_spec: root_spec,
-        entry_pointer: "#/paths/~1users/post/requestBody/content/application~1json/schema",
+        entry: "#/paths/~1users/post/requestBody/content/application~1json/schema",
         loader: nil
       )
 
@@ -811,7 +811,7 @@ defmodule Mix.OasisTest do
                  fn ->
                    Mix.Oasis.prepare_json_schema!(schema,
                      root_spec: root_spec,
-                     entry_pointer: "#/paths/~1users/post/requestBody/content/application~1json/schema",
+                     entry: "#/paths/~1users/post/requestBody/content/application~1json/schema",
                      base_uri: "/tmp/api/openapi.yaml",
                      loader: nil
                    )
@@ -840,7 +840,7 @@ defmodule Mix.OasisTest do
     refute valid_schema?(schema, %{"age" => 42})
   end
 
-  test "prepare_json_schema!/2 accepts :entry_ref to bundle a fragment" do
+  test "prepare_json_schema!/2 accepts :entry as a URI reference to bundle a fragment" do
     root_spec = %{
       "components" => %{
         "schemas" => %{
@@ -861,7 +861,7 @@ defmodule Mix.OasisTest do
     prepared =
       Mix.Oasis.prepare_json_schema!(schema,
         root_spec: root_spec,
-        entry_ref: "#/components/schemas/User"
+        entry: "#/components/schemas/User"
       )
 
     assert is_map(prepared)
@@ -909,7 +909,7 @@ defmodule Mix.OasisTest do
     prepared =
       Mix.Oasis.prepare_json_schema!(schema,
         root_spec: root_spec,
-        entry_pointer: "#/paths/~1users/post/requestBody/content/application~1json/schema"
+        entry: "#/paths/~1users/post/requestBody/content/application~1json/schema"
       )
 
     # (a) `components` is always retained, even when no surviving Schema Object

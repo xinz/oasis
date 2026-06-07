@@ -216,12 +216,12 @@ defmodule Mix.Oasis.Router do
         schema = Map.get(media, "schema")
 
         if schema != nil do
-          entry_pointer = entry_pointer(opts, ["requestBody", "content", content_type, "schema"])
+          entry = entry(opts, ["requestBody", "content", content_type, "schema"])
           source_meta = body_source_meta(opts, content_type)
 
           media =
             put_required_if_exists(media, %{
-              "schema" => Mix.Oasis.prepare_json_schema!(schema, schema_opts(opts, entry_pointer))
+              "schema" => Mix.Oasis.prepare_json_schema!(schema, schema_opts(opts, entry))
             })
 
           {Map.put(content_acc, content_type, media), Map.put(meta_acc, content_type, source_meta)}
@@ -271,11 +271,11 @@ defmodule Mix.Oasis.Router do
          {schemas_acc, meta_acc},
          opts
        ) do
-    entry_pointer = entry_pointer(opts, ["parameters", location, index, "schema"])
+    entry = entry(opts, ["parameters", location, index, "schema"])
 
     parameter_value =
       put_required_if_exists(parameter, %{
-        "schema" => Mix.Oasis.prepare_json_schema!(schema, schema_opts(opts, entry_pointer))
+        "schema" => Mix.Oasis.prepare_json_schema!(schema, schema_opts(opts, entry))
       })
 
     source_meta = parameter_source_meta(opts, location, name)
@@ -313,10 +313,10 @@ defmodule Mix.Oasis.Router do
   defp to_source_meta_opt(meta, "header", acc), do: Map.put(acc, :header_schema, meta)
   defp to_source_meta_opt(meta, "path", acc), do: Map.put(acc, :path_schema, meta)
 
-  defp schema_opts(opts, entry_pointer) do
+  defp schema_opts(opts, entry) do
     opts
     |> Keyword.take([:root_spec, :base_uri, :loader])
-    |> Keyword.put(:entry_pointer, entry_pointer)
+    |> Keyword.put(:entry, entry)
   end
 
   # Generation-time source metadata for a request body schema.
@@ -349,7 +349,7 @@ defmodule Mix.Oasis.Router do
     |> Map.get(formatted_url, formatted_url)
   end
 
-  defp entry_pointer(opts, relative_path) do
+  defp entry(opts, relative_path) do
     opts
     |> Keyword.fetch!(:operation_pointer_path)
     |> Kernel.++(relative_path)
