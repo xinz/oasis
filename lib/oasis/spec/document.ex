@@ -61,41 +61,58 @@ defmodule Oasis.Spec.Document do
       {:ok, %{document: document, source: source, format: format}} ->
         {:ok, {document, [source_path: source, format: format]}}
 
-      {:error, {:missing_file, _path, message}} when is_binary(message) ->
+      {:error, {"missing_file", _path, message}} when is_binary(message) ->
         {:error, %FileNotFoundError{message: message}}
 
-      {:error, {:missing_file, path, posix}} ->
+      {:error, {"missing_file", path, posix}} ->
         {:error, %FileNotFoundError{message: "Failed to open file #{inspect(path)} with error #{posix}"}}
 
-      {:error, {:yaml_parse_error, _path, message}} ->
+      {:error, {"yaml_parse_error", _path, message}} ->
         {:error, %InvalidSpecError{message: "Failed to parse yaml file: #{message}"}}
 
-      {:error, {:json_parse_error, _path, content}} ->
+      {:error, {"json_parse_error", _path, content}} ->
         {:error, %InvalidSpecError{message: "Failed to parse json file: `#{content}`"}}
 
-      {:error, {:unsupported_format, _path, ext}} ->
+      {:error, {"unsupported_format", _path, ext}} ->
         {:error,
          %InvalidSpecError{
            message: "Expect a yml/yaml or json format file, but got: `#{ext}`"
          }}
 
-      {:error, {:yaml_load_error, path, reason}} ->
+      {:error, {"yaml_load_error", path, reason}} ->
         {:error,
          %InvalidSpecError{message: "Failed to load yaml file `#{path}`: #{inspect(reason)}"}}
     end
   end
 
   @typedoc """
-  Structured error returned by `load_external/1`. Each tuple carries the
-  offending file path so callers (most importantly the JSONSchex loader
-  pipeline and `Oasis.Spec.OpenAPIRefResolver`) can build precise diagnostics.
+  String status code used in `load_external_error()`.
+
+  Allowed values are:
+
+  - `"missing_file"`
+  - `"yaml_parse_error"`
+  - `"json_parse_error"`
+  - `"unsupported_format"`
+  - `"yaml_load_error"`
+
+  Elixir typespecs cannot enumerate string literals directly, so this remains
+  `String.t()` at the type level and the fixed set is documented here.
+  """
+  @type load_external_error_status :: String.t()
+
+  @typedoc """
+  Structured error returned by `load_external/1`.
+
+  The first tuple element is a fixed string status code rather than an atom.
+  The remaining elements carry the offending file path plus any extra detail so
+  callers (most importantly the JSONSchex loader pipeline and
+  `Oasis.Spec.OpenAPIRefResolver`) can build precise diagnostics.
   """
   @type load_external_error ::
-          {:missing_file, String.t()}
-          | {:yaml_parse_error, String.t(), String.t()}
-          | {:json_parse_error, String.t()}
-          | {:unsupported_format, String.t(), String.t()}
-          | {:yaml_load_error, String.t(), term()}
+          {load_external_error_status(), String.t()}
+          | {load_external_error_status(), String.t(), String.t()}
+          | {load_external_error_status(), String.t(), term()}
 
   @doc """
   Loader callback for external OpenAPI and JSON Schema resources.
@@ -135,20 +152,20 @@ defmodule Oasis.Spec.Document do
       {:ok, %{document: document, source: source}} ->
         {:ok, %{document: document, base_uri: source}}
 
-      {:error, {:missing_file, path, _details}} ->
-        {:error, {:missing_file, path}}
+      {:error, {"missing_file", path, _details}} ->
+        {:error, {"missing_file", path}}
 
-      {:error, {:yaml_parse_error, path, message}} ->
-        {:error, {:yaml_parse_error, path, message}}
+      {:error, {"yaml_parse_error", path, message}} ->
+        {:error, {"yaml_parse_error", path, message}}
 
-      {:error, {:json_parse_error, path, _content}} ->
-        {:error, {:json_parse_error, path}}
+      {:error, {"json_parse_error", path, _content}} ->
+        {:error, {"json_parse_error", path}}
 
-      {:error, {:unsupported_format, path, ext}} ->
-        {:error, {:unsupported_format, path, ext}}
+      {:error, {"unsupported_format", path, ext}} ->
+        {:error, {"unsupported_format", path, ext}}
 
-      {:error, {:yaml_load_error, path, reason}} ->
-        {:error, {:yaml_load_error, path, reason}}
+      {:error, {"yaml_load_error", path, reason}} ->
+        {:error, {"yaml_load_error", path, reason}}
     end
   end
 
@@ -163,7 +180,7 @@ defmodule Oasis.Spec.Document do
         load_json(path)
 
       _other ->
-        {:error, {:unsupported_format, path, ext}}
+        {:error, {"unsupported_format", path, ext}}
     end
   end
 
@@ -173,13 +190,13 @@ defmodule Oasis.Spec.Document do
         {:ok, %{document: document, source: path, format: format_from_ext(ext)}}
 
       {:error, %YamlElixir.FileNotFoundError{message: message}} ->
-        {:error, {:missing_file, path, message}}
+        {:error, {"missing_file", path, message}}
 
       {:error, %YamlElixir.ParsingError{message: message}} ->
-        {:error, {:yaml_parse_error, path, message}}
+        {:error, {"yaml_parse_error", path, message}}
 
       {:error, reason} ->
-        {:error, {:yaml_load_error, path, reason}}
+        {:error, {"yaml_load_error", path, reason}}
     end
   end
 
@@ -191,11 +208,11 @@ defmodule Oasis.Spec.Document do
             {:ok, %{document: document, source: path, format: "json"}}
 
           {:error, _reason} ->
-            {:error, {:json_parse_error, path, content}}
+            {:error, {"json_parse_error", path, content}}
         end
 
       {:error, posix} ->
-        {:error, {:missing_file, path, posix}}
+        {:error, {"missing_file", path, posix}}
     end
   end
 

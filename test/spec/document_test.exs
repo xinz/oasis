@@ -39,30 +39,30 @@ defmodule Oasis.Spec.DocumentTest do
 
   describe "load_external/1" do
     test "unsupported extension returns structured tuple" do
-      assert {:error, {:unsupported_format, "anything.txt", ".txt"}} =
+      assert {:error, {"unsupported_format", "anything.txt", ".txt"}} =
                Document.load_external("anything.txt")
     end
 
-    test "missing file returns {:missing_file, path}" do
+    test "missing file returns {\"missing_file\", path}" do
       path = Path.join(System.tmp_dir!(), "oasis_external_missing_#{System.unique_integer([:positive])}.yaml")
       refute File.exists?(path)
 
-      assert {:error, {:missing_file, ^path}} = Document.load_external(path)
+      assert {:error, {"missing_file", ^path}} = Document.load_external(path)
     end
 
-    test "malformed YAML returns {:yaml_parse_error, path, msg}" do
+    test "malformed YAML returns {\"yaml_parse_error\", path, msg}" do
       path = tmp_file("oasis_external_malformed", ".yaml", ":\n")
       on_exit(fn -> File.rm(path) end)
 
-      assert {:error, {:yaml_parse_error, ^path, msg}} = Document.load_external(path)
+      assert {:error, {"yaml_parse_error", ^path, msg}} = Document.load_external(path)
       assert is_binary(msg)
     end
 
-    test "malformed JSON returns {:json_parse_error, path}" do
+    test "malformed JSON returns {\"json_parse_error\", path}" do
       path = tmp_file("oasis_external_malformed", ".json", "not json")
       on_exit(fn -> File.rm(path) end)
 
-      assert {:error, {:json_parse_error, ^path}} = Document.load_external(path)
+      assert {:error, {"json_parse_error", ^path}} = Document.load_external(path)
     end
   end
 
