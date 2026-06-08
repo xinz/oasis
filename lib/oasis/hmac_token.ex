@@ -40,7 +40,7 @@ defmodule Oasis.HMACToken do
         if abs(timestamp_now - timestamp) < @max_diff do
           {:ok, timestamp}
         else
-          {:error, :expired}
+          {:error, "expired"}
         end
       end
     end
@@ -61,7 +61,7 @@ defmodule Oasis.HMACToken do
       end
     end
 
-    defp parse_header_date(_otherwise), do: {:error, :expired}
+    defp parse_header_date(_otherwise), do: {:error, "expired"}
   end
   ```
   """
@@ -90,11 +90,27 @@ defmodule Oasis.HMACToken do
 
   @type token :: %{credential: String.t(), signed_headers: String.t(), signature: String.t()}
 
-  @type verify_error ::
-          {:error, :header_mismatch}
-          | {:error, :invalid_credential}
-          | {:error, :invalid_token}
-          | {:error, :expired}
+  @typedoc """
+  String status code used in `verify_error()`.
+
+  Allowed values are:
+
+  - `"header_mismatch"`
+  - `"invalid_credential"`
+  - `"invalid_token"`
+  - `"expired"`
+
+  Elixir typespecs cannot enumerate string literals directly, so this remains
+  `String.t()` at the type level and the fixed set is documented here.
+  """
+  @type verify_error_status :: String.t()
+
+  @typedoc """
+  Structured verification error returned by `verify/3`.
+
+  The second tuple element is a fixed string status code rather than an atom.
+  """
+  @type verify_error :: {:error, verify_error_status()}
 
   @callback crypto_config(conn :: Plug.Conn.t(), opts :: Keyword.t(), credential :: String.t()) ::
               Crypto.t() | nil
@@ -106,6 +122,9 @@ defmodule Oasis.HMACToken do
 
   @doc """
   Default implementation of the callback `verify`, only verify the signature.
+
+  Error statuses are normalized to strings for Oasis's public callback
+  contract.
   """
   @spec verify(
           conn :: Plug.Conn.t(),
@@ -172,7 +191,7 @@ defmodule Oasis.HMACToken do
 
     security.crypto_config(conn, opts, token.credential)
     |> case do
-      nil -> {:error, :invalid_credential}
+      nil -> {:error, "invalid_credential"}
       crypto -> {:ok, crypto}
     end
   end
@@ -181,7 +200,7 @@ defmodule Oasis.HMACToken do
     if token.signature == signature do
       {:ok, token}
     else
-      {:error, :invalid_token}
+      {:error, "invalid_token"}
     end
   end
 end

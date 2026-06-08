@@ -122,8 +122,8 @@ defmodule Oasis.Plug.HMACAuth do
           # write your rules to verify the token,
           # and return the expected results in:
           #   {:ok, token}, verified
-          #   {:error, :expired}, expired token
-          #   {:error, :invalid_token}, invalid token
+          #   {:error, "expired"}, expired token
+          #   {:error, "invalid_token"}, invalid token
         end
       end
 
@@ -206,25 +206,32 @@ defmodule Oasis.Plug.HMACAuth do
       {:ok, _} ->
         conn
 
-      {:error, e} when e in [:header_mismatch, :invalid_credential, :invalid_token, :expired] ->
+      {:error, e}
+      when e in ["header_mismatch", "invalid_credential", "invalid_token", "expired"] ->
         raise_invalid_auth({:error, e})
 
+      # Backward-compatible with older user callbacks that still return atoms.
+      {:error, e} when e in [:header_mismatch, :invalid_credential, :invalid_token, :expired] ->
+        raise_invalid_auth({:error, Atom.to_string(e)})
+
       _unknown_error ->
-        raise_invalid_auth({:error, :invalid_token})
+        raise_invalid_auth({:error, "invalid_token"})
     end
   end
 
   @doc """
   Parses the request token from HMAC HTTP authentication.
+
+  On parse failure this returns `{:error, "header_mismatch"}`.
   """
   @spec parse_hmac_auth(conn :: Plug.Conn.t(), algorithm :: algorithm()) ::
-          {:ok, Oasis.HMACToken.token()} | {:error, :header_mismatch}
+          {:ok, Oasis.HMACToken.token()} | {:error, String.t()}
   def parse_hmac_auth(conn, algorithm) do
     try do
       {:ok, do_parse_hmac_auth!(conn, algorithm)}
     rescue
       _ ->
-        {:error, :header_mismatch}
+        {:error, "header_mismatch"}
     end
   end
 
@@ -255,7 +262,7 @@ defmodule Oasis.Plug.HMACAuth do
     if token.signed_headers == signed_headers do
       {:ok, token}
     else
-      {:error, :header_mismatch}
+      {:error, "header_mismatch"}
     end
   end
 
@@ -311,7 +318,7 @@ defmodule Oasis.Plug.HMACAuth do
   defp parse_key_value_pair(pair, splitter),
     do: pair |> String.split(splitter, parts: 2) |> List.to_tuple()
 
-  defp raise_invalid_auth({:error, :header_mismatch}) do
+  defp raise_invalid_auth({:error, "header_mismatch"}) do
     raise BadRequestError,
       error: %BadRequestError.Required{},
       message: "the HMAC token is missing in the authorization header or format is wrong",
@@ -319,7 +326,7 @@ defmodule Oasis.Plug.HMACAuth do
       param_name: "authorization"
   end
 
-  defp raise_invalid_auth({:error, :invalid_credential}) do
+  defp raise_invalid_auth({:error, "invalid_credential"}) do
     raise BadRequestError,
       error: %BadRequestError.Required{},
       message: "the credential in the authorization header is not assigned",
@@ -327,7 +334,7 @@ defmodule Oasis.Plug.HMACAuth do
       param_name: "authorization"
   end
 
-  defp raise_invalid_auth({:error, :expired}) do
+  defp raise_invalid_auth({:error, "expired"}) do
     raise BadRequestError,
       error: %BadRequestError.InvalidToken{},
       message: "the HMAC token is expired",
@@ -336,7 +343,7 @@ defmodule Oasis.Plug.HMACAuth do
       plug_status: 401
   end
 
-  defp raise_invalid_auth({:error, :invalid_token}) do
+  defp raise_invalid_auth({:error, "invalid_token"}) do
     raise BadRequestError,
       error: %BadRequestError.InvalidToken{},
       message: "the HMAC token is invalid",

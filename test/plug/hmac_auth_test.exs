@@ -15,7 +15,7 @@ defmodule Oasis.Plug.HMACAuthTest do
           "HMAC-SHA256 Credential1=credential&SignedHeaders=signed_headers&Signature=signature"
         )
 
-      assert {:error, _} = parse_hmac_auth(conn, "hmac-sha256")
+      assert {:error, "header_mismatch"} = parse_hmac_auth(conn, "hmac-sha256")
     end
 
     test "parse fail with wrong scheme" do
@@ -26,7 +26,7 @@ defmodule Oasis.Plug.HMACAuthTest do
           "HMAC-SHA Credential=credential&SignedHeaders=signed_headers&Signature=signature"
         )
 
-      assert {:error, _} = parse_hmac_auth(conn, "hmac-sha256")
+      assert {:error, "header_mismatch"} = parse_hmac_auth(conn, "hmac-sha256")
     end
 
     test "parse success" do

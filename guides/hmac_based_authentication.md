@@ -251,7 +251,7 @@ defmodule Oasis.Gen.HMACAuth do
       if abs(timestamp_now - timestamp) < @max_diff do
         {:ok, timestamp}
       else
-        {:error, :expired}
+        {:error, "expired"}
       end
     end
   end
@@ -266,7 +266,7 @@ defmodule Oasis.Gen.HMACAuth do
     if body_hmac == body_hmac_header do
       {:ok, token}
     else
-      {:error, :invalid_token}
+      {:error, "invalid_token"}
     end
   end
 
@@ -286,7 +286,7 @@ defmodule Oasis.Gen.HMACAuth do
     end
   end
 
-  defp parse_header_date(_otherwise), do: {:error, :expired}
+  defp parse_header_date(_otherwise), do: {:error, "expired"}
 
   defp hmac(subtype, secret, content) do
     Base.encode64(:crypto.mac(:hmac, subtype, secret, content))

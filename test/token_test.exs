@@ -53,12 +53,12 @@ defmodule Oasis.TokenTest do
     crypto = %Crypto{secret_key_base: random_string(20), salt: "abcdef", max_age: 1}
     data = 123
     token = sign(crypto, data)
-    assert verify(%{crypto | max_age: 0}, token) == {:error, :expired}
+    assert verify(%{crypto | max_age: 0}, token) == {:error, "expired"}
   end
 
   test "verify/2 with invalid token" do
     crypto = %Crypto{secret_key_base: random_string(20), salt: "abcdef"}
-    assert verify(crypto, "unknowntoken") == {:error, :invalid}
+    assert verify(crypto, "unknowntoken") == {:error, "invalid"}
   end
 
   test "encrypt/2" do
@@ -77,7 +77,7 @@ defmodule Oasis.TokenTest do
     crypto = %Crypto{secret_key_base: random_string(20), secret: "abcdef"}
     data = %{"nickname" => "abc"}
     token = encrypt(crypto, data)
-    assert decrypt(crypto, "#{token}.123") == {:error, :invalid}
-    assert decrypt(crypto, "unknowntoken") == {:error, :invalid}
+    assert decrypt(crypto, "#{token}.123") == {:error, "invalid"}
+    assert decrypt(crypto, "unknowntoken") == {:error, "invalid"}
   end
 end

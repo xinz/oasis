@@ -50,7 +50,7 @@ defmodule Oasis.Plug.BearerAuthTest do
         {:ok, 1} ->
           verified
         _ ->
-          {:error, :invalid}
+          {:error, "invalid"}
       end
     end
 

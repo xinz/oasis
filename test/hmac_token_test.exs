@@ -61,7 +61,7 @@ defmodule Oasis.HMACTokenTest do
         signed_headers: c.signed_headers
       ]
 
-      assert {:error, :invalid_token} = verify(conn, token, opts)
+      assert {:error, "invalid_token"} = verify(conn, token, opts)
     end
 
     test "verify signature success - host only" do
