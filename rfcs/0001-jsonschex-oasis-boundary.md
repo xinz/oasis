@@ -1,8 +1,8 @@
 # RFC 0001: Oasis and JSONSchex Boundary for OpenAPI Schema References
 
-- Status: Implemented in Oasis with JSONSchex `0.7.0`
+- Status: Implemented in Oasis with JSONSchex `0.8.0`
 - Created: 2026-05-20
-- Updated: 2026-05-23
+- Updated: 2026-06-08
 - Target projects: `oasis`, `jsonschex`
 
 ## Summary
@@ -146,8 +146,7 @@ Preferred generated-code form today:
 
 Preferred generated-code form after upstream support:
 
-- `JSONSchex.Schema.compile_fragment!/2`
-- or `JSONSchex.Schema.compile!/2` over a JSONSchex-produced standalone bundled schema from `JSONSchex.bundle_fragment/2`
+- `JSONSchex.Schema.compile!/2` over a JSONSchex-produced standalone bundled schema from `JSONSchex.bundle_fragment/2`
 
 The generator should prefer explicit compile calls over sigils because generated code often needs visible options such as `:base_uri`. Loader options should be generated only when external resource loading is still required.
 
@@ -159,40 +158,19 @@ JSONSchex now provides fragment compilation and bundling in document context.
 
 Implemented APIs:
 
-- `JSONSchex.compile_fragment(document, opts)`
-- `JSONSchex.Schema.compile_fragment!(document, opts)`
 - `JSONSchex.bundle_fragment(document, opts)`
 
 Implemented options:
 
-- `:entry_pointer` - JSON Pointer to the schema fragment within the document
-- `:entry_ref` - alternative entry reference, such as `#/paths/~1pets/post/requestBody/content/application~1json/schema` or `path-or-uri#/components/schemas/User`
-- `:base_uri` - optional starting base URI/path for relative reference resolution; when `:entry_ref` includes a base and `:base_uri` is omitted, the entry ref base is used
+- `:entry` - JSON Pointer or URI reference locating the schema fragment within the document
+- `:base_uri` - optional starting base URI/path for relative reference resolution; when `:entry` includes a base and `:base_uri` is omitted, the entry base is used
 - `:loader` - optional external document loader, included only when unresolved external resources may still be reached
-- `:format_assertion` - existing JSONSchex option
-- `:content_assertion` - existing JSONSchex option
 
 There is no public `:document` option because the document is the first argument. There is no top-level `:source` option because `:base_uri` is the reference-resolution identity.
-
-Callers must provide exactly one of `:entry_pointer` or `:entry_ref`.
 
 Expected behavior:
 
 1. Locate the schema entrypoint in the containing document.
-2. Compile the schema as a JSON Schema resource in that original context.
-3. Resolve local refs against the correct containing resource.
-4. Resolve external refs through `:loader` when a loader is provided and an unresolved external resource is reached.
-5. Honor nested `$id` and anchors.
-6. Preserve recursive refs as graph references in the compiled schema.
-7. Return an embeddable `JSONSchex.Types.Schema` value or raise a compile error from the macro form.
-
-## Implemented JSONSchex Bundling API
-
-`JSONSchex.bundle_fragment(document, opts)` produces a standalone raw schema map/boolean from a fragment and its context.
-
-Implemented behavior:
-
-1. Start from a schema entrypoint inside a containing document/resource.
 2. Preserve local document context.
 3. Load reachable external resources when `:loader` is provided.
 4. Mount reachable external resources under `$defs`.
@@ -238,8 +216,8 @@ Because `$dynamicRef` is a JSON Schema concept, it should be implemented in JSON
 Completed:
 
 - Documented the Oasis/JSONSchex ownership boundary.
-- Released and integrated JSONSchex `0.7.0`.
-- Added `JSONSchex.compile_fragment/2`, `JSONSchex.Schema.compile_fragment!/2`, `JSONSchex.bundle_fragment/2`, and `JSONSchex.Ref.resolve_selected/2` upstream in JSONSchex.
+- Released and integrated JSONSchex `0.8.0`.
+- Added `JSONSchex.bundle_fragment/2` and `JSONSchex.Ref.resolve_selected/2` upstream in JSONSchex.
 - Replaced Oasis whole-document generic `$ref` expansion with `Oasis.Spec.OpenAPIRefResolver` backed by `JSONSchex.Ref.resolve_selected/2`.
 - Preserved Schema Object `$ref`s for JSONSchex fragment/bundle handling.
 - Prepared generated schemas with `JSONSchex.bundle_fragment/2` and emitted `JSONSchex.Schema.compile!/2` in generated code.
