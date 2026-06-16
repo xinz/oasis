@@ -32,7 +32,7 @@ defmodule Oasis.HMACToken do
     end
 
     @impl true
-    def verify(conn, token, _opts) do
+    def verify(conn, token, opts) do
       with {:ok, _} <- Oasis.HMACToken.verify(conn, token, opts),
            {:ok, timestamp} <- conn |> get_header_date() |> parse_header_date() do
         timestamp_now = DateTime.utc_now() |> DateTime.to_unix()

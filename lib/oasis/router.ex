@@ -7,6 +7,8 @@ defmodule Oasis.Router do
   huge difference, except that specify parameters which will then be available and types coverted
   in the function body:
 
+      require JSONSchex.Schema
+
       get("/hello/:id",
         private: %{
           path_schema: %{
