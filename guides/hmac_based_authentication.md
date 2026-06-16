@@ -242,6 +242,7 @@ defmodule Oasis.Gen.HMACAuth do
          {:ok, _} <- verify_date(conn, token, opts),
          {:ok, _} <- verify_body(conn, token, opts) do
       {:ok, token}
+    end
   end
   
   defp verify_date(conn, token, _opts) do
