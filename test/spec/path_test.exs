@@ -107,12 +107,16 @@ defmodule Oasis.Spec.PathTest do
 
     assert param_content_schema == %{"$ref" => "#/components/schemas/Content"}
 
-    {:ok, compiled} =
-      JSONSchex.compile_fragment(schema,
-        entry: "#/paths/~1page/get/parameters/query/0/content/application~1json/schema",
-        format_assertion: true,
-        content_assertion: false
+    {:ok, bundled} =
+      JSONSchex.bundle_fragment(schema,
+        entry: "#/paths/~1page/get/parameters/query/0/content/application~1json/schema"
       )
+
+    assert {:ok, compiled} =
+             JSONSchex.compile(bundled,
+               format_assertion: true,
+               content_assertion: false
+             )
 
     assert JSONSchex.validate(compiled, %{"name" => "hello", "tag" => 1}) == :ok
     assert {:error, _} = JSONSchex.validate(compiled, %{"name" => "hello", "tag" => "bad"})
@@ -498,12 +502,16 @@ defmodule Oasis.Spec.PathTest do
     content_schema = get_in(paths, ["/refresh", "post", "requestBody", "content", "application/json", "schema"])
     assert content_schema == %{"$ref" => "#/components/schemas/RefreshTokenForm"}
 
-    {:ok, compiled} =
-      JSONSchex.compile_fragment(schema,
-        entry: "#/paths/~1refresh/post/requestBody/content/application~1json/schema",
-        format_assertion: true,
-        content_assertion: false
+    {:ok, bundled} =
+      JSONSchex.bundle_fragment(schema,
+        entry: "#/paths/~1refresh/post/requestBody/content/application~1json/schema"
       )
+
+    assert {:ok, compiled} =
+             JSONSchex.compile(bundled,
+               format_assertion: true,
+               content_assertion: false
+             )
 
     assert JSONSchex.validate(compiled, %{"refresh_token" => "token"}) == :ok
     assert {:error, _} = JSONSchex.validate(compiled, %{})

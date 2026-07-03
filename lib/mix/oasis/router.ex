@@ -219,11 +219,7 @@ defmodule Mix.Oasis.Router do
           entry = entry(opts, ["requestBody", "content", content_type, "schema"])
           source_meta = body_source_meta(opts, content_type)
 
-          media =
-            put_required_if_exists(media, %{
-              "schema" => Mix.Oasis.prepare_json_schema!(schema, schema_opts(opts, entry))
-            })
-
+          media = Map.put(media, "schema", Mix.Oasis.prepare_json_schema!(schema, schema_opts(opts, entry)))
           {Map.put(content_acc, content_type, media), Map.put(meta_acc, content_type, source_meta)}
         else
           {content_acc, meta_acc}

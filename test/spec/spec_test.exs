@@ -21,12 +21,30 @@ defmodule Oasis.Spec.SpecTest do
     assert schema_from_json == schema
   end
 
+  test "resolves external OpenAPI refs from a relative root spec path" do
+    %Oasis.Spec.Document{schema: schema, source_path: source_path} =
+      Oasis.Spec.read("test/spec/file/external_openapi/root.yaml")
+
+    assert Path.type(source_path) == :absolute
+
+    assert get_in(schema, ["paths", "/users/:id", "get", "parameters", "path", Access.at(0), "schema"]) == %{
+             "type" => "integer"
+           }
+  end
+
   test "input invalid path" do
     {:error, %Oasis.FileNotFoundError{message: message}} = Oasis.Spec.read("unknown.yaml")
     assert message =~ ~s/Failed to open file "unknown.yaml"/
 
     {:error, %Oasis.FileNotFoundError{message: message}} = Oasis.Spec.read("unknown.json")
     assert message =~ ~s/Failed to open file "unknown.json" with error enoent/
+  end
+
+  test "non-object root document returns an invalid spec error" do
+    file_path = Path.join([@dir, "non_object.json"])
+
+    assert {:error, %Oasis.InvalidSpecError{message: message}} = Oasis.Spec.read(file_path)
+    assert message =~ "OpenAPI document root must be an object"
   end
 
   test "invalid yaml file content" do
@@ -58,13 +76,17 @@ defmodule Oasis.Spec.SpecTest do
     json_schema = request_body_of_refresh_token["content"]["application/json"]["schema"]
     assert json_schema == %{"$ref" => "#/components/schemas/RefreshTokenForm"}
 
-    {:ok, compiled} =
-      JSONSchex.compile_fragment(schema,
+    {:ok, bundled} =
+      JSONSchex.bundle_fragment(schema,
         entry: "#/paths/~1refresh_token/post/requestBody/content/application~1json/schema",
-        base_uri: file_path,
-        format_assertion: true,
-        content_assertion: false
+        base_uri: file_path
       )
+
+    assert {:ok, compiled} =
+             JSONSchex.compile(bundled,
+               format_assertion: true,
+               content_assertion: false
+             )
 
     assert JSONSchex.validate(compiled, %{"refresh_token" => "123"}) == :ok
     assert {:error, _} = JSONSchex.validate(compiled, %{})

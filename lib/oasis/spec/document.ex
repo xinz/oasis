@@ -58,8 +58,11 @@ defmodule Oasis.Spec.Document do
   @spec load(String.t()) :: {:ok, {map(), keyword()}} | {:error, Exception.t()}
   def load(path) when is_binary(path) do
     case load_file(path) do
-      {:ok, %{document: document, source: source, format: format}} ->
+      {:ok, %{document: document, source: source, format: format}} when is_map(document) ->
         {:ok, {document, [source_path: source, format: format]}}
+
+      {:ok, %{source: source}} ->
+        {:error, %InvalidSpecError{message: "OpenAPI document root must be an object: #{inspect(source)}"}}
 
       {:error, {"missing_file", _path, message}} when is_binary(message) ->
         {:error, %FileNotFoundError{message: message}}
@@ -78,10 +81,6 @@ defmodule Oasis.Spec.Document do
          %InvalidSpecError{
            message: "Expect a yml/yaml or json format file, but got: `#{ext}`"
          }}
-
-      {:error, {"yaml_load_error", path, reason}} ->
-        {:error,
-         %InvalidSpecError{message: "Failed to load yaml file `#{path}`: #{inspect(reason)}"}}
     end
   end
 
@@ -94,7 +93,6 @@ defmodule Oasis.Spec.Document do
   - `"yaml_parse_error"`
   - `"json_parse_error"`
   - `"unsupported_format"`
-  - `"yaml_load_error"`
 
   Elixir typespecs cannot enumerate string literals directly, so this remains
   `String.t()` at the type level and the fixed set is documented here.
@@ -122,12 +120,11 @@ defmodule Oasis.Spec.Document do
   `load_external/1` implements the JSONSchex loader contract:
 
       load_external(path :: String.t()) ::
-          {:ok, %{document: map(), base_uri: String.t()}}
+          {:ok, %{document: map() | boolean(), base_uri: String.t()}}
         | {:error, load_external_error()}
 
-  - **`:document`** — the decoded YAML/JSON document, always a map (booleans,
-    scalars, and lists are not produced for the OpenAPI / JSON-Schema sources
-    Oasis loads).
+  - **`:document`** — the decoded YAML/JSON document. OpenAPI resources are
+    expected to be maps; JSON Schema resources may also be boolean schemas.
   - **`:base_uri`** — the resolved file path. Used by JSONSchex (and by
     `Oasis.Spec.OpenAPIRefResolver`) to resolve relative refs that appear
     **inside** the loaded document against the right base.
@@ -145,7 +142,7 @@ defmodule Oasis.Spec.Document do
   external loading entirely (any unresolved external `$ref` then raises).
   """
   @spec load_external(String.t()) ::
-          {:ok, %{document: map(), base_uri: String.t()}}
+          {:ok, %{document: map() | boolean(), base_uri: String.t()}}
           | {:error, load_external_error()}
   def load_external(path) when is_binary(path) do
     case load_file(path) do
@@ -163,56 +160,62 @@ defmodule Oasis.Spec.Document do
 
       {:error, {"unsupported_format", path, ext}} ->
         {:error, {"unsupported_format", path, ext}}
-
-      {:error, {"yaml_load_error", path, reason}} ->
-        {:error, {"yaml_load_error", path, reason}}
     end
   end
 
   defp load_file(path) do
+    source_path = normalize_local_path(path)
     ext = String.downcase(Path.extname(path))
 
     case ext do
       ext when ext in [".yaml", ".yml"] ->
-        load_yaml(path, ext)
+        load_yaml(source_path, path, ext)
 
       ".json" ->
-        load_json(path)
+        load_json(source_path, path)
 
       _other ->
         {:error, {"unsupported_format", path, ext}}
     end
   end
 
-  defp load_yaml(path, ext) do
-    case YamlElixir.read_from_file(path) do
+  defp load_yaml(source_path, display_path, ext) do
+    case YamlElixir.read_from_file(source_path) do
       {:ok, document} ->
-        {:ok, %{document: document, source: path, format: format_from_ext(ext)}}
+        {:ok, %{document: document, source: source_path, format: format_from_ext(ext)}}
 
       {:error, %YamlElixir.FileNotFoundError{message: message}} ->
-        {:error, {"missing_file", path, message}}
+        {:error, {"missing_file", display_path, rewrite_message_path(message, source_path, display_path)}}
 
       {:error, %YamlElixir.ParsingError{message: message}} ->
-        {:error, {"yaml_parse_error", path, message}}
-
-      {:error, reason} ->
-        {:error, {"yaml_load_error", path, reason}}
+        {:error, {"yaml_parse_error", display_path, message}}
     end
   end
 
-  defp load_json(path) do
-    case File.read(path) do
+  defp load_json(source_path, display_path) do
+    case File.read(source_path) do
       {:ok, content} ->
         case Jason.decode(content) do
           {:ok, document} ->
-            {:ok, %{document: document, source: path, format: "json"}}
+            {:ok, %{document: document, source: source_path, format: "json"}}
 
           {:error, _reason} ->
-            {:error, {"json_parse_error", path, content}}
+            {:error, {"json_parse_error", display_path, content}}
         end
 
       {:error, posix} ->
-        {:error, {"missing_file", path, posix}}
+        {:error, {"missing_file", display_path, posix}}
+    end
+  end
+
+  defp rewrite_message_path(message, source_path, display_path) do
+    String.replace(message, inspect(source_path), inspect(display_path))
+  end
+
+  defp normalize_local_path(path) do
+    case URI.parse(path) do
+      %URI{scheme: nil} -> Path.expand(path)
+      _uri -> path
     end
   end
 

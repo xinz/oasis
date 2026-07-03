@@ -93,6 +93,63 @@ defmodule Oasis.Spec.OpenAPIRefResolverTest do
            }
   end
 
+
+  test "preserves external base for local schema refs nested inside external OpenAPI parameter refs" do
+    root = Path.expand("file/external_openapi/schema_ref_root.yaml", __DIR__)
+    common = Path.expand("file/external_openapi/schema_ref_common.yaml", __DIR__)
+
+    {:ok, document} = YamlElixir.read_from_file(root)
+
+    resolved = OpenAPIRefResolver.resolve(document, base_uri: root)
+    schema = get_in(resolved, ["paths", "/users/{id}", "get", "parameters", Access.at(0), "schema"])
+
+    assert schema == %{"$ref" => common <> "#/components/schemas/UserId"}
+
+    assert {:ok, bundled} =
+             JSONSchex.bundle_fragment(resolved,
+               entry: "/paths/~1users~1{id}/get/parameters/0/schema",
+               base_uri: root,
+               loader: &Oasis.Spec.Document.load_external/1
+             )
+
+    assert {:ok, compiled} = JSONSchex.compile(bundled)
+    assert JSONSchex.validate(compiled, 123) == :ok
+    assert {:error, _} = JSONSchex.validate(compiled, "not-an-integer")
+  end
+
+  test "preserves external base for relative schema refs nested inside external OpenAPI request body refs" do
+    root = Path.expand("file/external_openapi/schema_ref_root.yaml", __DIR__)
+    profile = Path.expand("file/external_openapi/schemas/profile.yaml", __DIR__)
+
+    {:ok, document} = YamlElixir.read_from_file(root)
+
+    resolved = OpenAPIRefResolver.resolve(document, base_uri: root)
+
+    schema =
+      get_in(resolved, [
+        "paths",
+        "/profiles",
+        "post",
+        "requestBody",
+        "content",
+        "application/json",
+        "schema"
+      ])
+
+    assert schema == %{"$ref" => profile}
+
+    assert {:ok, bundled} =
+             JSONSchex.bundle_fragment(resolved,
+               entry: "#/paths/~1profiles/post/requestBody/content/application~1json/schema",
+               base_uri: root,
+               loader: &Oasis.Spec.Document.load_external/1
+             )
+
+    assert {:ok, compiled} = JSONSchex.compile(bundled)
+    assert JSONSchex.validate(compiled, %{"name" => "Ada"}) == :ok
+    assert {:error, _} = JSONSchex.validate(compiled, %{})
+  end
+
   test "resolves nested external OpenAPI refs relative to loaded resource base URI" do
     root = Path.expand("file/external_openapi/nested_root.yaml", __DIR__)
 

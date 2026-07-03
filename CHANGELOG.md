@@ -2,12 +2,12 @@
 
 ## Unreleased
 
-* Replace `ex_json_schema` with `jsonschex` for JSON Schema Draft 2020-12 compilation and validation.
-* Generate schemas with `JSONSchex.Schema.compile!/2` and prepare schema fragments through `JSONSchex.bundle_fragment/2`.
+* Replace `ex_json_schema` with `jsonschex ~> 0.8.1` for JSON Schema Draft 2020-12 compilation and validation.
 * Resolve OpenAPI Reference Objects with `JSONSchex.Ref.resolve_selected/2` while preserving Schema Object `$ref`s for JSONSchex.
 * Add support coverage for external OpenAPI refs, external JSON Schema refs, recursive schemas, custom loaders, and schema diagnostics in generation.
 * `Mix.Oasis.prepare_json_schema!/2` now always invokes `JSONSchex.bundle_fragment/2` with a resolved loader (defaults to `&Oasis.Spec.Document.load_external/1`). Callers can supply a custom loader via `:loader`, or pass `loader: nil` to explicitly disable external loading.
 * **Breaking (unreleased only):** rename `Oasis.BadRequestError.JsonSchemaValidationFailed` to `Oasis.BadRequestError.JSONSchemaValidationFailed`, and drop its `:source` field. Runtime route/parameter context is available from `Plug.Conn` plus the surrounding `Oasis.BadRequestError`'s `:use_in` / `:param_name` fields. For deep-links into the OpenAPI document, see `Mix.Oasis.Router`'s `:source_meta`.
+* **Breaking (unreleased only):** normalize token/auth verification error statuses to strings in public callbacks and token helpers. `Oasis.Token.verify/2`, `Oasis.Token.decrypt/2`, and `Oasis.HMACToken.verify/3` now return statuses such as `"expired"`, `"invalid"`, and `"invalid_token"` instead of atoms. Plug adapters remain backward-compatible with existing custom callbacks that still return the old atom statuses.
 * Remove `ex_json_schema` as a (transitive) dependency.
 
 ## v0.6.0 (2026-01-29)

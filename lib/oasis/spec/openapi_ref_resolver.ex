@@ -45,6 +45,10 @@ defmodule Oasis.Spec.OpenAPIRefResolver do
   loader. Loader wrapper responses use atom metadata keys only:
   `{:ok, %{document: schema, base_uri: base_uri}}` (see the JSONSchex docs).
 
+  JSONSchex owns resource base propagation for loaded documents. Oasis's role in
+  this resolver is limited to choosing which OpenAPI Reference Objects should be
+  resolved before generation.
+
   ## Caller `opts` contract
 
   `resolve/2` is deliberately opinionated about the options it forwards to

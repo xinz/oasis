@@ -1,14 +1,14 @@
 # Proposal to JSONSchex: Selected `$ref` Resolution for JSON-like Documents
 
-- Status: Implemented in JSONSchex `0.7.0`; integrated in Oasis
+- Status: Implemented in JSONSchex `0.8.0`; integrated in Oasis
 - Created: 2026-05-21
-- Updated: 2026-05-23
+- Updated: 2026-06-09
 - Originating use case: Oasis OpenAPI Reference Object resolution
 - Target project: `jsonschex`
 
 ## Summary
 
-Oasis now uses `JSONSchex.compile_fragment/2` and `JSONSchex.bundle_fragment/2` for JSON Schema fragments. That cleanly moves JSON Schema graph semantics to JSONSchex.
+Oasis now uses `JSONSchex.bundle_fragment/2` for generated JSON Schema fragments. That cleanly moves JSON Schema graph semantics to JSONSchex.
 
 However, Oasis still needs to resolve OpenAPI Reference Objects such as Path Item Objects, Parameter Objects, Request Body Objects, and Response Objects before generating Plug routers. Those refs use the same `$ref` mechanics as JSON Schema refs:
 
@@ -99,7 +99,7 @@ schema:
   $ref: './schemas/user.yaml#/User'
 ```
 
-Those schema refs should remain available for `JSONSchex.compile_fragment/2` or `JSONSchex.bundle_fragment/2`.
+Those schema refs should remain available for `JSONSchex.bundle_fragment/2`.
 
 ## Implemented API
 
@@ -327,7 +327,7 @@ Other tools can use the same API for selected dereferencing in custom JSON/YAML 
 
 - Do not validate OpenAPI documents.
 - Do not understand OpenAPI object types.
-- Do not compile JSON Schema fragments. That is already covered by `compile_fragment/2` and `bundle_fragment/2`.
+- Do not compile or bundle JSON Schema fragments. That is already covered by JSONSchex fragment APIs such as `compile_fragment/2` and `bundle_fragment/2`.
 - Do not add many policy options in the first version.
 
 ## Suggested Test Cases

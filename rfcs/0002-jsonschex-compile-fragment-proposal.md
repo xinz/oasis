@@ -1,8 +1,8 @@
 # Proposal to JSONSchex: Compile JSON Schema Fragments in Document Context
 
-- Status: Implemented in JSONSchex `0.7.0`; integrated in Oasis
+- Status: Implemented in JSONSchex `0.8.0`; integrated in Oasis
 - Created: 2026-05-20
-- Updated: 2026-05-23
+- Updated: 2026-06-09
 - Originating use case: Oasis OpenAPI-to-Plug code generation
 - Target project: `jsonschex`
 
@@ -121,7 +121,7 @@ Example for a fragment whose reachable references are already contained in the p
 
 ```elixir
 JSONSchex.compile_fragment(openapi_document,
-  entry_pointer: "#/paths/~1users/post/requestBody/content/application~1json/schema",
+  entry: "#/paths/~1users/post/requestBody/content/application~1json/schema",
   base_uri: "/absolute/path/openapi.yaml",
   format_assertion: true,
   content_assertion: false
@@ -132,7 +132,7 @@ If the entrypoint can still reach unresolved external resources, the caller may 
 
 ```elixir
 JSONSchex.compile_fragment(openapi_document,
-  entry_pointer: "#/paths/~1users/post/requestBody/content/application~1json/schema",
+  entry: "#/paths/~1users/post/requestBody/content/application~1json/schema",
   base_uri: "/absolute/path/openapi.yaml",
   loader: &MyApp.SchemaLoader.load/1,
   format_assertion: true,
@@ -193,7 +193,7 @@ require JSONSchex.Schema
       }
     }
   },
-  entry_pointer: "#/paths/~1users/post/requestBody/content/application~1json/schema",
+  entry: "#/paths/~1users/post/requestBody/content/application~1json/schema",
   base_uri: "/absolute/path/openapi.yaml",
   format_assertion: true,
   content_assertion: false
@@ -212,42 +212,30 @@ This may be a full OpenAPI document or a JSON Schema resource. The document root
 
 There is no `:document` option in the public API.
 
-### `:entry_pointer`
+### `:entry`
 
-A JSON Pointer identifying the schema entrypoint inside `document`.
-
-The pointer may use either form:
-
-- `#/paths/~1users/post/requestBody/content/application~1json/schema`
-- `/paths/~1users/post/requestBody/content/application~1json/schema`
-
-### `:entry_ref`
-
-A URI-reference-style alternative to `:entry_pointer`.
+A JSON Pointer or URI reference identifying the schema entrypoint inside `document`.
 
 Examples:
 
+- `#/paths/~1users/post/requestBody/content/application~1json/schema`
+- `/paths/~1users/post/requestBody/content/application~1json/schema`
 - `#/components/schemas/UserInput`
 - `/absolute/path/openapi.yaml#/components/schemas/UserInput`
 
-When `:entry_ref` includes a base URI/path and `:base_uri` is omitted, JSONSchex uses the base from `:entry_ref` for relative reference resolution.
+When `:entry` includes a base URI/path and `:base_uri` is omitted, JSONSchex uses the base from `:entry` for relative reference resolution.
 
-### Exactly one entrypoint option
+### Required entrypoint option
 
-Callers must provide exactly one of:
-
-- `:entry_pointer`
-- `:entry_ref`
-
-Providing neither is invalid. Providing both is invalid.
+Callers must provide `:entry`.
 
 ### `:base_uri`
 
 Optional starting base URI/path for resolving relative references.
 
-Use `:base_uri` when an `:entry_pointer` fragment can reach relative external refs, or when the containing document has a meaningful file path/URI that should act as the reference base.
+Use `:base_uri` when an `:entry` fragment can reach relative external refs, or when the containing document has a meaningful file path/URI that should act as the reference base.
 
-When `:entry_ref` includes a base URI/path and `:base_uri` is omitted, JSONSchex uses the base from `:entry_ref`.
+When `:entry` includes a base URI/path and `:base_uri` is omitted, JSONSchex uses the base from `:entry`.
 
 There is no top-level `:source` option in the implemented fragment API.
 
@@ -284,8 +272,8 @@ It should also preserve any future JSONSchex compile options.
 `compile_fragment/2` should:
 
 1. Validate that the containing document is a map or boolean.
-2. Validate that exactly one of `:entry_pointer` or `:entry_ref` is provided.
-3. Resolve the entrypoint from `:entry_pointer` or `:entry_ref`.
+2. Validate that `:entry` is provided.
+3. Resolve the entrypoint from `:entry`.
 4. Treat the entrypoint as the root schema to compile.
 5. Preserve the containing document as the root reference context for local refs that point outside the fragment.
 6. Resolve relative external refs using the correct base URI and nested `$id` rules.
@@ -351,7 +339,7 @@ Example:
 ```elixir
 {:ok, standalone_schema} =
   JSONSchex.bundle_fragment(openapi_document,
-    entry_pointer: "#/paths/~1users/post/requestBody/content/application~1json/schema",
+    entry: "#/paths/~1users/post/requestBody/content/application~1json/schema",
     base_uri: "/absolute/path/openapi.yaml"
   )
 
@@ -420,7 +408,7 @@ Current JSONSchex coverage includes:
 - compile fragment runtime API
 - compile fragment macro API
 - bundle fragment API
-- `:entry_pointer` and `:entry_ref` variants
+- `:entry` pointer and URI-reference forms
 - exactly-one entrypoint validation
 - ambiguous, missing, and invalid entrypoint diagnostics
 - local refs from fragments resolving against the containing document
@@ -443,7 +431,7 @@ Fragment code has been split out of `JSONSchex.Compiler`:
 
 - `JSONSchex.Compiler.Fragment`
   - entrypoint parsing
-  - `:entry_pointer` / `:entry_ref` validation
+  - `:entry` validation
   - fragment entry resolution
   - fragment error construction
 
@@ -483,7 +471,7 @@ Oasis can target these APIs:
 
 ```elixir
 JSONSchex.compile_fragment(document,
-  entry_pointer: pointer,
+  entry: pointer,
   base_uri: base_uri,
   format_assertion: true,
   content_assertion: false
@@ -492,7 +480,7 @@ JSONSchex.compile_fragment(document,
 
 ```elixir
 JSONSchex.Schema.compile_fragment!(document,
-  entry_pointer: pointer,
+  entry: pointer,
   base_uri: base_uri,
   format_assertion: true,
   content_assertion: false
@@ -501,7 +489,7 @@ JSONSchex.Schema.compile_fragment!(document,
 
 ```elixir
 JSONSchex.bundle_fragment(document,
-  entry_pointer: pointer,
+  entry: pointer,
   base_uri: base_uri
 )
 ```

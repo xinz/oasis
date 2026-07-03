@@ -9,7 +9,7 @@
 
 Oasis should own OpenAPI document ingestion, OpenAPI-aware reference resolution, operation extraction, and generated Plug code. JSONSchex should own JSON Schema graph compilation and validation, including `$ref`, external resources, recursion, nested `$id`, anchors, and future `$dynamicRef` behavior.
 
-The key capability is a JSONSchex API that compiles a schema fragment in its original document/resource context. With `JSONSchex.compile_fragment/2`, `JSONSchex.Schema.compile_fragment!/2`, and `JSONSchex.bundle_fragment/2`, Oasis can stop eagerly expanding JSON Schema references across the whole OpenAPI document and avoid Oasis-specific synthetic `$defs` bundling.
+The key capability is a JSONSchex API that bundles a schema fragment in its original document/resource context. With `JSONSchex.bundle_fragment/2`, Oasis can stop eagerly expanding JSON Schema references across the whole OpenAPI document and avoid Oasis-specific synthetic `$defs` bundling.
 
 ## Motivation
 
@@ -131,7 +131,7 @@ Potential Oasis-side shape:
 - `schema`: the raw schema fragment, or an entry reference into a document
 - `document`: the containing OpenAPI or schema resource document
 - `base_uri`: base URI/path for the containing document, usually derived from `Oasis.Spec.Document.source_path`
-- `entry_pointer`: JSON Pointer to the schema inside the containing document, when known
+- `entry`: JSON Pointer or URI reference to the schema inside the containing document, when known
 - `loader`: optional Oasis external document loader, included only when unresolved external refs may still be reached
 
 This does not need to be part of the public user API initially. It can remain an internal generation representation.
@@ -246,7 +246,7 @@ JSONSchex tests should cover schema graph semantics directly:
 - anchors
 - recursive refs
 - invalid/missing refs
-- embeddability through `JSONSchex.Schema.compile_fragment!/2`
+- embeddability through `JSONSchex.Schema.compile!/2` over bundled standalone schemas
 
 ## Integration Decisions and Open Questions
 
@@ -258,7 +258,7 @@ Resolved for the first Oasis integration:
 
 Resolved for the follow-up Oasis integration:
 
-1. Schema generation diagnostics now include entry pointer/ref and base URI context when JSONSchex bundling or precheck compilation fails.
+1. Schema generation diagnostics now include `:entry` and base URI context when JSONSchex bundling or precheck compilation fails.
 2. Library callers can pass a custom JSONSchex-compatible `:loader` through Oasis generation options. The mix task continues to use the default local YAML/JSON loader.
 3. OpenAPI source metadata is exposed at **generation time only**, as the public `:source_meta` field on `%Mix.Oasis.Router{}`. It identifies each extracted schema structurally (`path`, `http_verb`, `parameter_location`/`parameter_name` for parameters; `content_type` for bodies) using the user's original OpenAPI URL shape. Runtime JSON Schema validation errors deliberately do **not** carry this metadata: route/parameter context is already available via `Plug.Conn` plus `Oasis.BadRequestError`'s `:use_in` / `:param_name`, and deep-links into the OpenAPI document are a tooling concern, not a runtime one.
 4. Oasis compacts bundled standalone schemas by keeping known JSON Schema document keywords plus the OpenAPI `components` context. `components` is retained unconditionally for simplicity: conditional retention would require a full bundled-graph scan for `$ref`s into `#/components/...`, which adds non-trivial complexity for no observable behavioral benefit (JSONSchex tolerates unreferenced sibling keys, and OpenAPI documents typically already have `components`).

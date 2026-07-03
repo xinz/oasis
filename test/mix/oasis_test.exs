@@ -81,6 +81,25 @@ defmodule Mix.OasisTest do
     assert valid_schema?(schema, %{"age" => 42}) == false
   end
 
+
+  test "Mix.Oasis.new/2 uses JSONSchex-rebased refs from external OpenAPI objects" do
+    %Oasis.Spec.Document{} = document = Oasis.Spec.read("test/spec/file/external_openapi/schema_ref_root.yaml")
+
+    files = Mix.Oasis.new(document, [])
+
+    get_user = pre_plug_router(files, "getUser")
+    id_schema = get_in(get_user.path_schema, ["id", "schema"])
+
+    assert valid_schema?(id_schema, 123)
+    assert valid_schema?(id_schema, "not-an-integer") == false
+
+    create_profile = pre_plug_router(files, "createProfile")
+    profile_schema = get_in(create_profile.body_schema, ["content", "application/json", "schema"])
+
+    assert valid_schema?(profile_schema, %{"name" => "Ada"})
+    assert valid_schema?(profile_schema, %{}) == false
+  end
+
   test "Mix.Oasis.new/2 bundles recursive component schemas with JSONSchex" do
     file_path = Path.expand("tasks/file/jsonschex_boundary/recursive_schema.yaml", __DIR__)
     %Oasis.Spec.Document{} = document = Oasis.Spec.read(file_path)
@@ -509,6 +528,28 @@ defmodule Mix.OasisTest do
       assert router.schema_compile_required? == true
     end
 
+    test "preserves request body media type metadata when preparing its schema" do
+      request_body = %{
+        "content" => %{
+          "multipart/form-data" => %{
+            "schema" => %{
+              "type" => "object",
+              "properties" => %{"avatar" => %{"type" => "string"}}
+            },
+            "encoding" => %{"avatar" => %{"contentType" => "image/png"}},
+            "examples" => %{"sample" => %{"value" => %{"avatar" => "..."}}}
+          }
+        }
+      }
+
+      router = router_from_inline_spec("uploadAvatar", nil, request_body)
+      media = get_in(router.body_schema, ["content", "multipart/form-data"])
+
+      assert media["encoding"] == %{"avatar" => %{"contentType" => "image/png"}}
+      assert media["examples"] == %{"sample" => %{"value" => %{"avatar" => "..."}}}
+      assert media["schema"]["type"] == "object"
+    end
+
     test "remains false when parameters are present but every entry is skipped (missing `name`/`schema`)" do
       parameters = %{
         "query" => [
@@ -618,7 +659,7 @@ defmodule Mix.OasisTest do
       |> IO.iodata_to_binary()
     end
 
-    test "router.ex emits `require JSONSchex.Schema` iff any router has schema_compile_required? == true" do
+    test "router.ex emits `require JSONSchex.Schema` iff a router embeds path schemas" do
       without =
         render_router_template([
           %Mix.Oasis.Router{
