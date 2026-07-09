@@ -71,6 +71,7 @@ defmodule Mix.Tasks.Oas.Gen.Plug do
     end
   end
 
+  @spec raise_with_help(String.t()) :: no_return()
   defp raise_with_help(msg) do
     Mix.raise("""
     #{msg}

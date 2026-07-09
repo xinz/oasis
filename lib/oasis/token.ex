@@ -219,9 +219,9 @@ defmodule Oasis.Token do
     |> Enum.filter(&filter_nil_opt/1)
   end
 
-  defp normalize_verify_error_status(status) when is_binary(status), do: status
-  defp normalize_verify_error_status(status) when is_atom(status), do: Atom.to_string(status)
-  defp normalize_verify_error_status(status), do: inspect(status)
+  defp normalize_verify_error_status(:expired), do: "expired"
+  defp normalize_verify_error_status(:invalid), do: "invalid"
+  defp normalize_verify_error_status(:missing), do: "missing"
 
   defp filter_nil_opt({_, value}) when value != nil, do: true
   defp filter_nil_opt(_), do: false
