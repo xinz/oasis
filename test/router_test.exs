@@ -1,5 +1,5 @@
 defmodule Oasis.RouterTest do
-  
+
   defmodule Sample do
         use Oasis.Router
     plug(:match)
