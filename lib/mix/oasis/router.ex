@@ -158,7 +158,7 @@ defmodule Mix.Oasis.Router do
 
     routers = Enum.sort(routers, &(&1.url < &2.url))
 
-    {:eex, target, "router.ex", Module.concat([name_space, module_name]), %{routers: routers}}
+    {:eex, target, "router.ex.eex", Module.concat([name_space, module_name]), %{routers: routers}}
   end
 
   defp new(apps, url, http_verb, operation, opts) do
@@ -485,7 +485,7 @@ defmodule Mix.Oasis.Router do
 
   defp inject_request_validator(apps, router) do
     content =
-      Mix.Oasis.eval_from(apps, "priv/templates/oas.gen.plug/plug/request_validator.exs",
+      Mix.Oasis.eval_from(apps, "priv/templates/oas.gen.plug/plug/request_validator.exs.eex",
         router: router
       )
 
@@ -522,14 +522,14 @@ defmodule Mix.Oasis.Router do
     key_to_assigns = Map.get(security_scheme, @spec_ext_key_to_assigns)
 
     content =
-      Mix.Oasis.eval_from(apps, "priv/templates/oas.gen.plug/plug/bearer_auth.exs",
+      Mix.Oasis.eval_from(apps, "priv/templates/oas.gen.plug/plug/bearer_auth.exs.eex",
         security: security_module,
         key_to_assigns: key_to_assigns
       )
 
     {
       content,
-      {:new_eex, Path.join(dir, file_name), "bearer_token.ex", security_module}
+      {:new_eex, Path.join(dir, file_name), "bearer_token.ex.eex", security_module}
     }
   end
 
@@ -547,7 +547,7 @@ defmodule Mix.Oasis.Router do
     signed_headers = Map.get(security_scheme, @spec_ext_signed_headers)
 
     content =
-      Mix.Oasis.eval_from(apps, "priv/templates/oas.gen.plug/plug/hmac_auth.exs",
+      Mix.Oasis.eval_from(apps, "priv/templates/oas.gen.plug/plug/hmac_auth.exs.eex",
         algorithm: String.to_atom(algorithm),
         security: security_module,
         signed_headers: signed_headers
@@ -555,7 +555,7 @@ defmodule Mix.Oasis.Router do
 
     {
       content,
-      {:new_eex, Path.join(dir, file_name), "hmac_token.ex", security_module}
+      {:new_eex, Path.join(dir, file_name), "hmac_token.ex.eex", security_module}
     }
   end
 
@@ -574,8 +574,8 @@ defmodule Mix.Oasis.Router do
 
     {
       [
-        {:eex, Path.join([dir, pre_plug_file_name]), "pre_plug.ex", pre_plug_module},
-        {:new_eex, Path.join([dir, plug_file_name]), "plug.ex", plug_module}
+        {:eex, Path.join([dir, pre_plug_file_name]), "pre_plug.ex.eex", pre_plug_module},
+        {:new_eex, Path.join([dir, plug_file_name]), "plug.ex.eex", plug_module}
       ],
       router
     }

@@ -14,7 +14,7 @@ defmodule Mix.OasisTest do
 
   defp pre_plug_router(files, operation_id) do
     Enum.find_value(files, fn
-      {_format, _file_path, "pre_plug.ex", _module, router} ->
+      {_format, _file_path, "pre_plug.ex.eex", _module, router} ->
         if router.operation_id == operation_id, do: router
 
       _other ->
@@ -628,12 +628,12 @@ defmodule Mix.OasisTest do
 
   describe "router.ex / pre_plug.ex template rendering of `require JSONSchex.Schema`" do
     @router_template_path Path.expand(
-                            "../../priv/templates/oas.gen.plug/router.ex",
+                            "../../priv/templates/oas.gen.plug/router.ex.eex",
                             __DIR__
                           )
 
     @pre_plug_template_path Path.expand(
-                              "../../priv/templates/oas.gen.plug/pre_plug.ex",
+                              "../../priv/templates/oas.gen.plug/pre_plug.ex.eex",
                               __DIR__
                             )
 
@@ -649,7 +649,7 @@ defmodule Mix.OasisTest do
 
     defp render_pre_plug_template(router) do
       template = File.read!(@pre_plug_template_path)
-      # `pre_plug.ex` receives the router struct as `context` (with
+      # `pre_plug.ex.eex` receives the router struct as `context` (with
       # `:module_name` added on top), so mirror that here.
       context = Map.put(router, :module_name, SomeApp.PrePlug)
 
@@ -1045,19 +1045,19 @@ defmodule Mix.OasisTest do
     assert router_module_name == Oasis.Gen.Router
 
     Enum.map(plug_files, fn
-      {_, file_path, "pre_plug.ex", GetNameSpaceFromOperationObject.PreGetId, router} ->
+      {_, file_path, "pre_plug.ex.eex", GetNameSpaceFromOperationObject.PreGetId, router} ->
         assert file_path == "lib/get_name_space_from_operation_object/pre_get_id.ex"
         assert router.plug_module == GetNameSpaceFromOperationObject.GetId
 
-      {_, file_path, "plug.ex", GetNameSpaceFromOperationObject.GetId, router} ->
+      {_, file_path, "plug.ex.eex", GetNameSpaceFromOperationObject.GetId, router} ->
         assert file_path == "lib/get_name_space_from_operation_object/get_id.ex"
         assert router.plug_module == GetNameSpaceFromOperationObject.GetId
 
-      {_, file_path, "pre_plug.ex", DeleteNameSpaceFromOperationObject.PreDeleteId, router} ->
+      {_, file_path, "pre_plug.ex.eex", DeleteNameSpaceFromOperationObject.PreDeleteId, router} ->
         assert file_path == "lib/delete_name_space_from_operation_object/pre_delete_id.ex"
         assert router.plug_module == DeleteNameSpaceFromOperationObject.DeleteId
 
-      {_, file_path, "plug.ex", DeleteNameSpaceFromOperationObject.DeleteId, router} ->
+      {_, file_path, "plug.ex.eex", DeleteNameSpaceFromOperationObject.DeleteId, router} ->
         assert file_path == "lib/delete_name_space_from_operation_object/delete_id.ex"
         assert router.plug_module == DeleteNameSpaceFromOperationObject.DeleteId
     end)
@@ -1069,19 +1069,19 @@ defmodule Mix.OasisTest do
     assert router_module_name == Global.Router
 
     Enum.map(plug_files, fn
-      {_, file_path, "pre_plug.ex", GetNameSpaceFromOperationObject.PreGetId, router} ->
+      {_, file_path, "pre_plug.ex.eex", GetNameSpaceFromOperationObject.PreGetId, router} ->
         assert file_path == "lib/get_name_space_from_operation_object/pre_get_id.ex"
         assert router.plug_module == GetNameSpaceFromOperationObject.GetId
 
-      {_, file_path, "plug.ex", GetNameSpaceFromOperationObject.GetId, router} ->
+      {_, file_path, "plug.ex.eex", GetNameSpaceFromOperationObject.GetId, router} ->
         assert file_path == "lib/get_name_space_from_operation_object/get_id.ex"
         assert router.plug_module == GetNameSpaceFromOperationObject.GetId
 
-      {_, file_path, "pre_plug.ex", DeleteNameSpaceFromOperationObject.PreDeleteId, router} ->
+      {_, file_path, "pre_plug.ex.eex", DeleteNameSpaceFromOperationObject.PreDeleteId, router} ->
         assert file_path == "lib/delete_name_space_from_operation_object/pre_delete_id.ex"
         assert router.plug_module == DeleteNameSpaceFromOperationObject.DeleteId
 
-      {_, file_path, "plug.ex", DeleteNameSpaceFromOperationObject.DeleteId, router} ->
+      {_, file_path, "plug.ex.eex", DeleteNameSpaceFromOperationObject.DeleteId, router} ->
         assert file_path == "lib/delete_name_space_from_operation_object/delete_id.ex"
         assert router.plug_module == DeleteNameSpaceFromOperationObject.DeleteId
     end)
@@ -1092,19 +1092,19 @@ defmodule Mix.OasisTest do
     assert router_module_name == From.Command.Router
 
     Enum.map(plug_files, fn
-      {_, file_path, "pre_plug.ex", From.Command.PreGetId, router} ->
+      {_, file_path, "pre_plug.ex.eex", From.Command.PreGetId, router} ->
         assert file_path == "lib/from/command/pre_get_id.ex"
         assert router.plug_module == From.Command.GetId
 
-      {_, file_path, "plug.ex", From.Command.GetId, router} ->
+      {_, file_path, "plug.ex.eex", From.Command.GetId, router} ->
         assert file_path == "lib/from/command/get_id.ex"
         assert router.plug_module == From.Command.GetId
 
-      {_, file_path, "pre_plug.ex", From.Command.PreDeleteId, router} ->
+      {_, file_path, "pre_plug.ex.eex", From.Command.PreDeleteId, router} ->
         assert file_path == "lib/from/command/pre_delete_id.ex"
         assert router.plug_module == From.Command.DeleteId
 
-      {_, file_path, "plug.ex", From.Command.DeleteId, router} ->
+      {_, file_path, "plug.ex.eex", From.Command.DeleteId, router} ->
         assert file_path == "lib/from/command/delete_id.ex"
         assert router.plug_module == From.Command.DeleteId
     end)
@@ -1162,11 +1162,11 @@ defmodule Mix.OasisTest do
     [router_file | plug_files] =
       Mix.Oasis.new(paths_spec, router: "my_router", name_space: "Hello")
 
-    {_, file_path, "router.ex", router_module_name, _} = router_file
+    {_, file_path, "router.ex.eex", router_module_name, _} = router_file
     assert file_path == "lib/hello/my_router.ex"
     assert router_module_name == Hello.MyRouter
     [pre_plug, _] = plug_files
-    {_, pre_plug_file_path, "pre_plug.ex", pre_plug_module_name, binding} = pre_plug
+    {_, pre_plug_file_path, "pre_plug.ex.eex", pre_plug_module_name, binding} = pre_plug
     assert pre_plug_file_path == "lib/hello/pre_put_new.ex"
     assert pre_plug_module_name == Hello.PrePutNew
     body_schema = binding.body_schema
@@ -1210,11 +1210,11 @@ defmodule Mix.OasisTest do
 
     paths_spec = %{"paths" => %{"/submit" => %{"post" => post}}}
     [router_file | plug_files] = Mix.Oasis.new(paths_spec, [])
-    {_, file_path, "router.ex", router_module_name, _} = router_file
+    {_, file_path, "router.ex.eex", router_module_name, _} = router_file
     assert file_path == "lib/oasis/gen/router.ex"
     assert router_module_name == Oasis.Gen.Router
     [pre_plug, _] = plug_files
-    {_, pre_plug_file_path, "pre_plug.ex", pre_plug_module_name, binding} = pre_plug
+    {_, pre_plug_file_path, "pre_plug.ex.eex", pre_plug_module_name, binding} = pre_plug
     assert pre_plug_file_path == "lib/oasis/gen/pre_post_submit.ex"
     assert pre_plug_module_name == Oasis.Gen.PrePostSubmit
     body_schema = binding.body_schema
@@ -1279,7 +1279,7 @@ defmodule Mix.OasisTest do
              assert(length(binding_pre_routers) == 2)
 
     Enum.map(plug_files, fn
-      {_, file_path1, "pre_plug.ex", Oasis.Gen.PreAddPet, router} ->
+      {_, file_path1, "pre_plug.ex.eex", Oasis.Gen.PreAddPet, router} ->
         assert file_path1 == "lib/oasis/gen/pre_add_pet.ex" and router.http_verb == "post" and
                  router.operation_id == "addPet"
 
@@ -1298,11 +1298,11 @@ defmodule Mix.OasisTest do
 
         assert valid_schema?(schema, %{"name" => "test-name", "fav_number" => 10}) == false
 
-      {_, file_path2, "plug.ex", Oasis.Gen.AddPet, router} ->
+      {_, file_path2, "plug.ex.eex", Oasis.Gen.AddPet, router} ->
         assert file_path2 == "lib/oasis/gen/add_pet.ex" and router.http_verb == "post" and
                  router.operation_id == "addPet"
 
-      {_, file_path3, "pre_plug.ex", Oasis.Gen.PreGetMyPost, router} ->
+      {_, file_path3, "pre_plug.ex.eex", Oasis.Gen.PreGetMyPost, router} ->
         assert file_path3 == "lib/oasis/gen/pre_get_my_post.ex" and router.http_verb == "get" and
                  router.operation_id == nil
 
@@ -1311,7 +1311,7 @@ defmodule Mix.OasisTest do
         assert valid_schema?(schema, 1) == false
         assert valid_schema?(schema, ["a", "b", "c"]) == true
 
-      {_, file_path4, "plug.ex", Oasis.Gen.GetMyPost, router} ->
+      {_, file_path4, "plug.ex.eex", Oasis.Gen.GetMyPost, router} ->
         assert file_path4 == "lib/oasis/gen/get_my_post.ex" and router.http_verb == "get" and
                  router.operation_id == nil
     end)
@@ -1382,20 +1382,20 @@ defmodule Mix.OasisTest do
     assert urls == ["/delete_pet", "/queryPet", "/queryPet"]
 
     Enum.map(plug_files, fn
-      {_, file_path, "pre_plug.ex", Oasis.Gen.PrePutQueryPet, router} ->
+      {_, file_path, "pre_plug.ex.eex", Oasis.Gen.PrePutQueryPet, router} ->
         assert file_path == "lib/oasis/gen/pre_put_query_pet.ex" and router.http_verb == "put"
         assert router.header_schema == nil and router.cookie_schema != nil
         %{"session_id" => %{"schema" => schema}} = router.cookie_schema
         assert valid_schema?(schema, 1) == true
         assert valid_schema?(schema, "abc") == false
 
-      {_, file_path, "plug.ex", Oasis.Gen.PutQueryPet, router} ->
+      {_, file_path, "plug.ex.eex", Oasis.Gen.PutQueryPet, router} ->
         assert file_path == "lib/oasis/gen/put_query_pet.ex" and router.http_verb == "put"
         assert router.header_schema == nil and router.cookie_schema != nil
         assert router.plug_module == Oasis.Gen.PutQueryPet
         assert router.pre_plug_module == Oasis.Gen.PrePutQueryPet
 
-      {_, file_path, "pre_plug.ex", Oasis.Gen.PreGetQueryPet, router} ->
+      {_, file_path, "pre_plug.ex.eex", Oasis.Gen.PreGetQueryPet, router} ->
         %{"token" => %{"schema" => token_schema}, "appid" => %{"schema" => appid_schema}} =
           router.header_schema
 
@@ -1406,11 +1406,11 @@ defmodule Mix.OasisTest do
         assert file_path == "lib/oasis/gen/pre_get_query_pet.ex" and router.http_verb == "get"
         assert router.header_schema != nil and router.cookie_schema == nil
 
-      {_, file_path, "plug.ex", Oasis.Gen.GetQueryPet, router} ->
+      {_, file_path, "plug.ex.eex", Oasis.Gen.GetQueryPet, router} ->
         assert file_path == "lib/oasis/gen/get_query_pet.ex" and router.http_verb == "get"
         assert router.header_schema != nil and router.cookie_schema == nil
 
-      {_, file_path, "pre_plug.ex", Oasis.Gen.PreDeletePet, router} ->
+      {_, file_path, "pre_plug.ex.eex", Oasis.Gen.PreDeletePet, router} ->
         assert file_path == "lib/oasis/gen/pre_delete_pet.ex" and router.http_verb == "delete"
         assert router.path_schema != nil and router.query_schema != nil
         %{"id" => %{"schema" => schema}} = router.path_schema
@@ -1420,7 +1420,7 @@ defmodule Mix.OasisTest do
         assert valid_schema?(schema, ["1", "2", "3"]) == true
         assert valid_schema?(schema, "abc") == false
 
-      {_, file_path, "plug.ex", Oasis.Gen.DeletePet, router} ->
+      {_, file_path, "plug.ex.eex", Oasis.Gen.DeletePet, router} ->
         assert file_path == "lib/oasis/gen/delete_pet.ex" and router.http_verb == "delete"
         assert router.path_schema != nil and router.query_schema != nil
         assert router.pre_plug_module == Oasis.Gen.PreDeletePet
@@ -1453,13 +1453,13 @@ defmodule Mix.OasisTest do
     [pre_plug_file, plug_file] = plugs
     {_, path, template, module, binding} = pre_plug_file
     assert path == "lib/try/my_open_api/pre_hello.ex"
-    assert template == "pre_plug.ex"
+    assert template == "pre_plug.ex.eex"
     assert module == Try.MyOpenApi.PreHello
     assert binding.pre_plug_module == Try.MyOpenApi.PreHello
     assert binding.plug_module == Try.MyOpenApi.Hello
     {_, path, template, module, binding} = plug_file
     assert path == "lib/try/my_open_api/hello.ex"
-    assert template == "plug.ex"
+    assert template == "plug.ex.eex"
     assert module == Try.MyOpenApi.Hello
     assert binding.pre_plug_module == Try.MyOpenApi.PreHello
     assert binding.plug_module == Try.MyOpenApi.Hello
@@ -1474,13 +1474,13 @@ defmodule Mix.OasisTest do
     [pre_plug_file, plug_file] = plugs
     {_, path, template, module, binding} = pre_plug_file
     assert path == "lib/try/test/open_api2/pre_hello.ex"
-    assert template == "pre_plug.ex"
+    assert template == "pre_plug.ex.eex"
     assert module == Try.Test.OpenApi2.PreHello
     assert binding.pre_plug_module == Try.Test.OpenApi2.PreHello
     assert binding.plug_module == Try.Test.OpenApi2.Hello
     {_, path, template, module, binding} = plug_file
     assert path == "lib/try/test/open_api2/hello.ex"
-    assert template == "plug.ex"
+    assert template == "plug.ex.eex"
     assert module == Try.Test.OpenApi2.Hello
     assert binding.pre_plug_module == Try.Test.OpenApi2.PreHello
     assert binding.plug_module == Try.Test.OpenApi2.Hello
@@ -1512,7 +1512,7 @@ defmodule Mix.OasisTest do
 
     {_, path, template, module, binding} = bearer_auth_file
     assert path == "lib/security/my_open_api/my_bearer_auth.ex"
-    assert template == "bearer_token.ex"
+    assert template == "bearer_token.ex.eex"
     assert module == Security.MyOpenApi.MyBearerAuth
     assert is_list(binding.security)
     [content] = binding.security
@@ -1550,7 +1550,7 @@ defmodule Mix.OasisTest do
     [_router, _pre_say_hello, _say_hello, bearer_auth_file] = Mix.Oasis.new(paths_spec, [])
     {_, path, template, module, binding} = bearer_auth_file
     assert path == "lib/oasis/gen/hello_bearer_auth.ex"
-    assert template == "bearer_token.ex"
+    assert template == "bearer_token.ex.eex"
     assert module == Oasis.Gen.HelloBearerAuth
     assert is_list(binding.security)
     [content] = binding.security
@@ -1599,7 +1599,7 @@ defmodule Mix.OasisTest do
     |> Enum.map(fn files ->
       [_pre_plug, plug, auth_file] = files
       {_, plug_path, _, _, _} = plug
-      {_, path, "bearer_token.ex", module, binding} = auth_file
+      {_, path, "bearer_token.ex.eex", module, binding} = auth_file
       [content] = binding.security
 
       case path do
@@ -1654,7 +1654,7 @@ defmodule Mix.OasisTest do
 
     {_, path, template, module, binding} = bearer_auth_file
     assert path == "lib/security/my_open_api/my_bearer_auth.ex"
-    assert template == "bearer_token.ex"
+    assert template == "bearer_token.ex.eex"
     assert module == Security.MyOpenApi.MyBearerAuth
     assert is_list(binding.security)
     [content] = binding.security
@@ -1691,14 +1691,14 @@ defmodule Mix.OasisTest do
     [_router | files] = Mix.Oasis.new(paths_spec, name_space: "Security.OpenApi")
     {say_hello_files, say_bye_files} = Enum.split(files, 3)
     [_, _, bearer_auth_file] = say_hello_files
-    {_, path, "bearer_token.ex", module, binding} = bearer_auth_file
+    {_, path, "bearer_token.ex.eex", module, binding} = bearer_auth_file
     assert path == "lib/security/open_api/my_bearer_auth.ex"
     assert module == Security.OpenApi.MyBearerAuth
     [content] = binding.security
     assert content =~ ~s/Oasis.Plug.BearerAuth/
     assert content =~ ~s/security: Security.OpenApi.MyBearerAuth/
     [pre_plug, _plug] = say_bye_files
-    {_, path, "pre_plug.ex", module, binding} = pre_plug
+    {_, path, "pre_plug.ex.eex", module, binding} = pre_plug
     assert path == "lib/security/open_api/pre_delete_say_bye.ex"
     assert module == Security.OpenApi.PreDeleteSayBye
     assert binding.security == nil
@@ -1728,24 +1728,24 @@ defmodule Mix.OasisTest do
     [_router | files] = Mix.Oasis.new(paths_spec, [])
     {plugs_url2, plugs_url1} = Enum.split(files, 3)
     [pre_plug, _, bearer_file] = plugs_url2
-    {_, path, "pre_plug.ex", module, binding} = pre_plug
+    {_, path, "pre_plug.ex.eex", module, binding} = pre_plug
     assert path == "lib/url2/pre_post_url2.ex"
     assert module == Url2.PrePostUrl2
     [content] = binding.security
     assert content =~ ~s/Oasis.Plug.BearerAuth/
     assert content =~ ~s/security: MyToken.BearerAuth/
-    {_, path, "bearer_token.ex", module, binding_from_bearer} = bearer_file
+    {_, path, "bearer_token.ex.eex", module, binding_from_bearer} = bearer_file
     assert path == "lib/my_token/bearer_auth.ex"
     assert module == MyToken.BearerAuth
     assert binding_from_bearer == binding
     [pre_plug, _, bearer_file] = plugs_url1
-    {_, path, "pre_plug.ex", module, binding} = pre_plug
+    {_, path, "pre_plug.ex.eex", module, binding} = pre_plug
     assert path == "lib/url1/pre_get_url1.ex"
     assert module == Url1.PreGetUrl1
     [content] = binding.security
     assert content =~ ~s/Oasis.Plug.BearerAuth/
     assert content =~ ~s/security: MyToken.BearerAuth/
-    {_, path, "bearer_token.ex", module, binding_from_bearer} = bearer_file
+    {_, path, "bearer_token.ex.eex", module, binding_from_bearer} = bearer_file
     assert path == "lib/my_token/bearer_auth.ex"
     assert module == MyToken.BearerAuth
     assert binding_from_bearer == binding
@@ -1775,24 +1775,24 @@ defmodule Mix.OasisTest do
     [_router | files] = Mix.Oasis.new(paths_spec, name_space: "Security.OpenApi")
     {plugs_url2, plugs_url1} = Enum.split(files, 3)
     [pre_plug, _, bearer_file] = plugs_url2
-    {_, path, "pre_plug.ex", module, binding} = pre_plug
+    {_, path, "pre_plug.ex.eex", module, binding} = pre_plug
     assert path == "lib/security/open_api/pre_post_url2.ex"
     assert module == Security.OpenApi.PrePostUrl2
     [content] = binding.security
     assert content =~ ~s/Oasis.Plug.BearerAuth/
     assert content =~ ~s/security: Security.OpenApi.BearerAuth/
-    {_, path, "bearer_token.ex", module, binding_from_bearer} = bearer_file
+    {_, path, "bearer_token.ex.eex", module, binding_from_bearer} = bearer_file
     assert path == "lib/security/open_api/bearer_auth.ex"
     assert module == Security.OpenApi.BearerAuth
     assert binding_from_bearer == binding
     [pre_plug, _, bearer_file] = plugs_url1
-    {_, path, "pre_plug.ex", module, binding} = pre_plug
+    {_, path, "pre_plug.ex.eex", module, binding} = pre_plug
     assert path == "lib/security/open_api/pre_get_url1.ex"
     assert module == Security.OpenApi.PreGetUrl1
     [content] = binding.security
     assert content =~ ~s/Oasis.Plug.BearerAuth/
     assert content =~ ~s/security: Security.OpenApi.BearerAuth/
-    {_, path, "bearer_token.ex", module, binding_from_bearer} = bearer_file
+    {_, path, "bearer_token.ex.eex", module, binding_from_bearer} = bearer_file
     assert path == "lib/security/open_api/bearer_auth.ex"
     assert module == Security.OpenApi.BearerAuth
     assert binding_from_bearer == binding
