@@ -1,6 +1,8 @@
 defmodule Oasis.Spec.Path do
   @moduledoc false
 
+  alias Oasis.Spec.{Document, Operation}
+
   @regex_url ~r/{.*?}/
 
   @supported_http_verbs [
@@ -35,60 +37,71 @@ defmodule Oasis.Spec.Path do
 
   def supported_http_verbs(), do: @supported_http_verbs
 
-  def build(%Oasis.Spec.Document{schema: schema} = root) do
+  def build(%Document{schema: schema} = root) do
     paths = schema["paths"] || %{}
 
-    {paths, aliases} =
-      Enum.reduce(paths, {%{}, %{}}, fn
-        {"/" <> _ = path_expr, _info} = path, {paths_acc, aliases_acc} ->
+    {paths, aliases, schema_sources} =
+      Enum.reduce(paths, {%{}, %{}, %{}}, fn
+        {"/" <> _ = path_expr, info}, {paths_acc, aliases_acc, sources_acc} ->
           formatted = format_url(path_expr)
+          {mapped_path, path_sources} = map_path(path_expr, formatted, info)
 
           {
-            Map.put(paths_acc, formatted, map_path(path)),
-            Map.put(aliases_acc, formatted, path_expr)
+            Map.put(paths_acc, formatted, mapped_path),
+            Map.put(aliases_acc, formatted, path_expr),
+            Map.merge(sources_acc, path_sources)
           }
 
-        {field, value}, {paths_acc, aliases_acc} ->
-          {Map.put(paths_acc, field, value), aliases_acc}
+        {field, value}, {paths_acc, aliases_acc, sources_acc} ->
+          {Map.put(paths_acc, field, value), aliases_acc, sources_acc}
       end)
 
-    schema = Map.put(schema, "paths", paths)
+    normalized_schema = Map.put(schema, "paths", paths)
 
-    %{root | schema: schema, url_aliases: aliases}
+    %{
+      root
+      | schema: normalized_schema,
+        reference_schema: root.reference_schema || schema,
+        url_aliases: aliases,
+        schema_sources: schema_sources
+    }
   end
 
   def build(schema) when is_map(schema) do
     schema
-    |> Oasis.Spec.Document.new()
+    |> Document.new()
     |> build()
   end
 
-  defp map_path({path_expr, info}) do
+  defp map_path(path_expr, formatted_path, info) do
     {global_params, rest} = Map.pop(info, "parameters", [])
 
-    Enum.reduce(rest, %{}, fn {field, value}, acc ->
-      value =
-        map_path_item_object(
-          field,
-          path_expr,
-          value,
-          global_params
-        )
+    Enum.reduce(rest, {%{}, %{}}, fn {field, value}, {path_acc, sources_acc} ->
+      {value, sources} =
+        map_path_item_object(field, path_expr, formatted_path, value, global_params)
 
-      Map.put(acc, field, value)
+      {Map.put(path_acc, field, value), Map.merge(sources_acc, sources)}
     end)
   end
 
-  defp map_path_item_object(http_verb, path_expr, operation, global_params)
+  defp map_path_item_object(http_verb, path_expr, formatted_path, operation, global_params)
        when http_verb in @supported_http_verbs do
-    Oasis.Spec.Operation.build(path_expr, operation, global_params)
+    {operation, parameter_sources} =
+      Operation.build_with_sources(path_expr, http_verb, operation, global_params)
+
+    schema_sources =
+      Map.new(parameter_sources, fn {{location, name}, source} ->
+        {{:parameter, formatted_path, http_verb, location, name}, source}
+      end)
+
+    {operation, schema_sources}
   end
 
-  defp map_path_item_object("trace", path_expr, _operation, _global_params) do
+  defp map_path_item_object("trace", path_expr, _formatted_path, _operation, _global_params) do
     raise Oasis.InvalidSpecError, "Not Support `trace` http method from `#{path_expr}` path"
   end
 
-  defp map_path_item_object(_other_field, _, value, _global_params) do
-    value
+  defp map_path_item_object(_other_field, _path_expr, _formatted_path, value, _global_params) do
+    {value, %{}}
   end
 end

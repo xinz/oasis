@@ -1,7 +1,16 @@
 defmodule Oasis.Gen.Plug.PreTestPostJSON do
-    use Oasis.Controller
+  # NOTICE: Please DO NOT write any business code in this module, since it will always be overridden when
+  # run `mix oas.gen.plug` task command with the OpenAPI Specification file.
+  use Oasis.Controller
   use Plug.ErrorHandler
-  plug(Plug.Parsers, parsers: [:json], json_decoder: Jason, pass: ["*/*"])
+  require JSONSchex.Schema
+
+  plug(Plug.Parsers,
+    parsers: [:json],
+    json_decoder: Jason,
+    pass: ["*/*"],
+    body_reader: {Oasis.CacheRawBodyReader, :read_body, []}
+  )
 
   plug(Oasis.Plug.RequestValidator,
     body_schema: %{
@@ -9,7 +18,7 @@ defmodule Oasis.Gen.Plug.PreTestPostJSON do
       "content" => %{
         "application/json" => %{
           "schema" =>
-            Oasis.Test.JSONSchema.compile!(
+            JSONSchex.Schema.compile!(
               %{
                 "items" => %{
                   "type" => "object",
@@ -20,19 +29,30 @@ defmodule Oasis.Gen.Plug.PreTestPostJSON do
                   "required" => ["id", "name"]
                 },
                 "type" => "array"
-              })
+              },
+              format_assertion: true,
+              content_assertion: false
+            )
         },
         "application/vnd.api-v1+json" => %{
           "schema" =>
-            Oasis.Test.JSONSchema.compile!(%{"type" => "integer"})
+            JSONSchex.Schema.compile!(
+              %{"type" => "integer"},
+              format_assertion: true,
+              content_assertion: false
+            )
         },
         "application/vnd.api-v2+json" => %{
           "schema" =>
-            Oasis.Test.JSONSchema.compile!(%{"type" => "number"})
+            JSONSchex.Schema.compile!(
+              %{"type" => "number"},
+              format_assertion: true,
+              content_assertion: false
+            )
         },
         "application/vnd.api-v3+json" => %{
           "schema" =>
-            Oasis.Test.JSONSchema.compile!(
+            JSONSchex.Schema.compile!(
               %{
                 "properties" => %{
                   "_json" => %{
@@ -45,7 +65,10 @@ defmodule Oasis.Gen.Plug.PreTestPostJSON do
                   }
                 },
                 "type" => "object"
-              })
+              },
+              format_assertion: true,
+              content_assertion: false
+            )
         }
       }
     }

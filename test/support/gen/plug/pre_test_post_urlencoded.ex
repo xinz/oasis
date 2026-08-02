@@ -1,6 +1,9 @@
 defmodule Oasis.Gen.Plug.PreTestPostUrlencoded do
-    use Oasis.Controller
+  # NOTICE: Please DO NOT write any business code in this module, since it will always be overridden when
+  # run `mix oas.gen.plug` task command with the OpenAPI Specification file.
+  use Oasis.Controller
   use Plug.ErrorHandler
+  require JSONSchex.Schema
 
   plug(Plug.Parsers,
     parsers: [:urlencoded],
@@ -14,7 +17,7 @@ defmodule Oasis.Gen.Plug.PreTestPostUrlencoded do
       "content" => %{
         "application/x-www-form-urlencoded" => %{
           "schema" =>
-            Oasis.Test.JSONSchema.compile!(
+            JSONSchex.Schema.compile!(
               %{
                 "properties" => %{
                   "name" => %{"type" => "string"},
@@ -22,7 +25,10 @@ defmodule Oasis.Gen.Plug.PreTestPostUrlencoded do
                 },
                 "required" => ["name", "fav_number"],
                 "type" => "object"
-              })
+              },
+              format_assertion: true,
+              content_assertion: false
+            )
         }
       }
     }

@@ -1,8 +1,8 @@
 # RFC 0001: Oasis and JSONSchex Boundary for OpenAPI Schema References
 
-- Status: Implemented in Oasis with JSONSchex `0.8.0`
+- Status: Implemented in Oasis with JSONSchex `0.9.0`
 - Created: 2026-05-20
-- Updated: 2026-06-08
+- Updated: 2026-07-29
 - Target projects: `oasis`, `jsonschex`
 
 ## Summary
@@ -216,13 +216,14 @@ Because `$dynamicRef` is a JSON Schema concept, it should be implemented in JSON
 Completed:
 
 - Documented the Oasis/JSONSchex ownership boundary.
-- Released and integrated JSONSchex `0.8.0`.
+- Released and integrated JSONSchex `0.9.0`.
 - Added `JSONSchex.bundle_fragment/2` and `JSONSchex.Ref.resolve_selected/2` upstream in JSONSchex.
+- Integrated reachable fragment bundling and deep rebasing of unselected refs from RFC 0005; Oasis requires JSONSchex `0.9.0` or later.
 - Replaced Oasis whole-document generic `$ref` expansion with `Oasis.Spec.OpenAPIRefResolver` backed by `JSONSchex.Ref.resolve_selected/2`.
 - Preserved Schema Object `$ref`s for JSONSchex fragment/bundle handling.
 - Prepared generated schemas with `JSONSchex.bundle_fragment/2` and emitted `JSONSchex.Schema.compile!/2` in generated code.
 - Removed `ex_json_schema` and `Oasis.Spec.Utils`.
-- Added tests for external OpenAPI refs, external JSON Schema refs, recursive schemas, custom loaders, selected ref resolution, generation diagnostics, runtime source metadata, and compact bundled schemas.
+- Added tests for external OpenAPI refs, external JSON Schema refs, recursive schemas, custom loaders, selected ref resolution, generation diagnostics, runtime source metadata, and standalone verbatim bundles.
 
 ## Testing Strategy
 
@@ -252,7 +253,7 @@ JSONSchex tests should cover schema graph semantics directly:
 
 Resolved for the first Oasis integration:
 
-1. Oasis uses `JSONSchex.bundle_fragment/2` during generation and emits `JSONSchex.Schema.compile!/2` over standalone bundled schemas. This keeps generated code compact and avoids embedding the full OpenAPI document in every generated module.
+1. Oasis uses `JSONSchex.bundle_fragment/2` during generation and emits `JSONSchex.Schema.compile!/2` over standalone bundled schemas. JSONSchex may retain containing-document context, so Oasis does not promise byte-minimal generated literals.
 2. Oasis resolves a single `:loader` up front for every `JSONSchex.bundle_fragment/2` call (default `&Oasis.Spec.Document.load_external/1`). JSONSchex only invokes the loader when an unresolved external `$ref` is actually reached, so self-contained schemas pay no behavioral cost. Callers can override with `:loader` or pass `loader: nil` to disable external loading explicitly. The earlier "try without a loader, then retry with one" fallback was removed because it could mask the original (often structural) error.
 3. Oasis does not normalize OpenAPI 3.1/3.2 Schema Objects before handing them to JSONSchex. JSONSchex is the owner of JSON Schema Draft 2020-12 semantics and compatibility handling such as `dependencies`.
 
@@ -261,7 +262,7 @@ Resolved for the follow-up Oasis integration:
 1. Schema generation diagnostics now include `:entry` and base URI context when JSONSchex bundling or precheck compilation fails.
 2. Library callers can pass a custom JSONSchex-compatible `:loader` through Oasis generation options. The mix task continues to use the default local YAML/JSON loader.
 3. OpenAPI source metadata is exposed at **generation time only**, as the public `:source_meta` field on `%Mix.Oasis.Router{}`. It identifies each extracted schema structurally (`path`, `http_verb`, `parameter_location`/`parameter_name` for parameters; `content_type` for bodies) using the user's original OpenAPI URL shape. Runtime JSON Schema validation errors deliberately do **not** carry this metadata: route/parameter context is already available via `Plug.Conn` plus `Oasis.BadRequestError`'s `:use_in` / `:param_name`, and deep-links into the OpenAPI document are a tooling concern, not a runtime one.
-4. Oasis compacts bundled standalone schemas by keeping known JSON Schema document keywords plus the OpenAPI `components` context. `components` is retained unconditionally for simplicity: conditional retention would require a full bundled-graph scan for `$ref`s into `#/components/...`, which adds non-trivial complexity for no observable behavioral benefit (JSONSchex tolerates unreferenced sibling keys, and OpenAPI documents typically already have `components`).
+4. Oasis preserves the standalone bundle returned by JSONSchex verbatim. It does not maintain a JSON Schema keyword allowlist or promise that OpenAPI containing-document keys are removed; doing so would discard custom vocabularies, future keywords, or annotations.
 
 Still open:
 

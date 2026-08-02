@@ -40,8 +40,8 @@ def handle_errors(conn, %{
   # `error.error` is the underlying %JSONSchex.Types.Error{} with `rule`, `path`,
   # `context`, etc. You can inspect it to render rich validation feedback.
   #
-  # `error.path` is a JSON Pointer string into the request payload (e.g.
-  # "#/name"). Pointer segments are escaped per RFC 6901 (`~` → `~0`, `/` → `~1`).
+  # `error.path` is a URI-fragment JSON Pointer into the request payload (e.g.
+  # "#/name"). It applies RFC 6901 escaping and URI percent-encoding.
   #
   # `use_in` ("query", "header", "cookie", "path", or "body") and `param_name`
   # together identify which request input failed validation. Combined with

@@ -1,7 +1,15 @@
 defmodule Oasis.Gen.Plug.PreTestSignBearerAuth do
-    use Oasis.Controller
+  # NOTICE: Please DO NOT write any business code in this module, since it will always be overridden when
+  # run `mix oas.gen.plug` task command with the OpenAPI Specification file.
+  use Oasis.Controller
   use Plug.ErrorHandler
-  plug(Plug.Parsers, parsers: [:urlencoded], pass: ["*/*"])
+  require JSONSchex.Schema
+
+  plug(Plug.Parsers,
+    parsers: [:urlencoded],
+    pass: ["*/*"],
+    body_reader: {Oasis.CacheRawBodyReader, :read_body, []}
+  )
 
   plug(Oasis.Plug.RequestValidator,
     body_schema: %{
@@ -9,7 +17,7 @@ defmodule Oasis.Gen.Plug.PreTestSignBearerAuth do
       "content" => %{
         "application/x-www-form-urlencoded" => %{
           "schema" =>
-            Oasis.Test.JSONSchema.compile!(
+            JSONSchex.Schema.compile!(
               %{
                 "properties" => %{
                   "username" => %{"type" => "string"},
@@ -18,14 +26,17 @@ defmodule Oasis.Gen.Plug.PreTestSignBearerAuth do
                 },
                 "required" => ["username", "password"],
                 "type" => "object"
-              })
+              },
+              format_assertion: true,
+              content_assertion: false
+            )
         }
       }
     }
   )
 
   def call(conn, opts) do
-    conn |> super(conn) |> Oasis.Gen.Plug.TestSignBearerAuth.call(opts) |> halt()
+    conn |> super(opts) |> Oasis.Gen.Plug.TestSignBearerAuth.call(opts) |> halt()
   end
 
   defdelegate handle_errors(conn, error), to: Oasis.Gen.Plug.TestSignBearerAuth

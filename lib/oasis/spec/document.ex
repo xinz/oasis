@@ -19,13 +19,24 @@ defmodule Oasis.Spec.Document do
   alias Oasis.{FileNotFoundError, InvalidSpecError}
 
   @enforce_keys [:schema]
-  defstruct [:schema, :source_path, :format, url_aliases: %{}]
+  defstruct [
+    :schema,
+    :reference_schema,
+    :source_path,
+    :format,
+    url_aliases: %{},
+    schema_sources: %{}
+  ]
+
+  @type pointer_path :: [String.t() | non_neg_integer()]
 
   @type t :: %__MODULE__{
           schema: map(),
+          reference_schema: map() | nil,
           source_path: String.t() | nil,
           format: String.t() | nil,
-          url_aliases: %{optional(String.t()) => String.t()}
+          url_aliases: %{optional(String.t()) => String.t()},
+          schema_sources: %{optional(term()) => pointer_path()}
         }
 
   @doc """
@@ -36,16 +47,22 @@ defmodule Oasis.Spec.Document do
   - `:source_path` - file path the document was loaded from (used as base URI).
   - `:format` - `"yaml"`, `"yml"`, or `"json"`.
   - `:url_aliases` - map of post-processed (Plug-style) URL key to the original
-    OpenAPI URL key. Populated by `Oasis.Spec.Path.build/1`; preserved here so
+    OpenAPI URL key. Populated during path normalization and preserved here so
     downstream code can report locations using the user's original spec syntax.
+  - `:reference_schema` - structurally resolved but otherwise unnormalized
+    OpenAPI document used as JSONSchex's reference root.
+  - `:schema_sources` - sidecar map from normalized generation inputs to their
+    source JSON Pointer token paths in `:reference_schema`.
   """
   @spec new(map(), keyword()) :: t()
   def new(schema, opts \\ []) when is_map(schema) do
     %__MODULE__{
       schema: schema,
+      reference_schema: opts[:reference_schema],
       source_path: opts[:source_path],
       format: opts[:format],
-      url_aliases: Keyword.get(opts, :url_aliases, %{})
+      url_aliases: Keyword.get(opts, :url_aliases, %{}),
+      schema_sources: Keyword.get(opts, :schema_sources, %{})
     }
   end
 
@@ -93,6 +110,7 @@ defmodule Oasis.Spec.Document do
   - `"yaml_parse_error"`
   - `"json_parse_error"`
   - `"unsupported_format"`
+  - `"invalid_document"`
 
   Elixir typespecs cannot enumerate string literals directly, so this remains
   `String.t()` at the type level and the fixed set is documented here.
@@ -117,7 +135,9 @@ defmodule Oasis.Spec.Document do
 
   ## Contract
 
-  `load_external/1` implements the JSONSchex loader contract:
+  JSONSchex accepts either `{:ok, document}` or an atom-keyed metadata wrapper
+  `{:ok, %{document: document, base_uri: base_uri}}`. This default Oasis loader
+  always returns the wrapper form:
 
       load_external(path :: String.t()) ::
           {:ok, %{document: map() | boolean(), base_uri: String.t()}}
@@ -125,20 +145,19 @@ defmodule Oasis.Spec.Document do
 
   - **`:document`** — the decoded YAML/JSON document. OpenAPI resources are
     expected to be maps; JSON Schema resources may also be boolean schemas.
-  - **`:base_uri`** — the resolved file path. Used by JSONSchex (and by
-    `Oasis.Spec.OpenAPIRefResolver`) to resolve relative refs that appear
+  - **`:base_uri`** — the resolved file path or `file:` URI. Used by JSONSchex
+    (and by `Oasis.Spec.OpenAPIRefResolver`) to resolve relative refs that appear
     **inside** the loaded document against the right base.
 
   ## Where it is used
 
-  - Default `:loader` for `JSONSchex.bundle_fragment/2` calls inside
-    `Mix.Oasis.prepare_json_schema!/2`.
+  - Default `:loader` for generation-time `JSONSchex.bundle_fragment/2` calls.
   - Default `:loader` for `Oasis.Spec.OpenAPIRefResolver.resolve/2` when
     following external OpenAPI Reference Objects (e.g.
     `$ref: "./common.yaml#/components/parameters/UserId"`).
 
   Callers wanting in-memory or test-only loaders may override `:loader` with
-  any function matching this signature, or pass `loader: nil` to opt out of
+  either valid JSONSchex success form, or pass `loader: nil` to opt out of
   external loading entirely (any unresolved external `$ref` then raises).
   """
   @spec load_external(String.t()) ::
@@ -146,8 +165,12 @@ defmodule Oasis.Spec.Document do
           | {:error, load_external_error()}
   def load_external(path) when is_binary(path) do
     case load_file(path) do
-      {:ok, %{document: document, source: source}} ->
+      {:ok, %{document: document, source: source}}
+      when is_map(document) or is_boolean(document) ->
         {:ok, %{document: document, base_uri: source}}
+
+      {:ok, %{document: document}} ->
+        {:error, {"invalid_document", path, document}}
 
       {:error, {"missing_file", path, _details}} ->
         {:error, {"missing_file", path}}
@@ -164,25 +187,25 @@ defmodule Oasis.Spec.Document do
   end
 
   defp load_file(path) do
-    source_path = normalize_local_path(path)
-    ext = String.downcase(Path.extname(path))
+    {source_path, source_uri} = normalize_local_path(path)
+    ext = String.downcase(Path.extname(source_path))
 
     case ext do
       ext when ext in [".yaml", ".yml"] ->
-        load_yaml(source_path, path, ext)
+        load_yaml(source_path, source_uri, path, ext)
 
       ".json" ->
-        load_json(source_path, path)
+        load_json(source_path, source_uri, path)
 
       _other ->
         {:error, {"unsupported_format", path, ext}}
     end
   end
 
-  defp load_yaml(source_path, display_path, ext) do
+  defp load_yaml(source_path, source_uri, display_path, ext) do
     case YamlElixir.read_from_file(source_path) do
       {:ok, document} ->
-        {:ok, %{document: document, source: source_path, format: format_from_ext(ext)}}
+        {:ok, %{document: document, source: source_uri, format: format_from_ext(ext)}}
 
       {:error, %YamlElixir.FileNotFoundError{message: message}} ->
         {:error, {"missing_file", display_path, rewrite_message_path(message, source_path, display_path)}}
@@ -192,12 +215,12 @@ defmodule Oasis.Spec.Document do
     end
   end
 
-  defp load_json(source_path, display_path) do
+  defp load_json(source_path, source_uri, display_path) do
     case File.read(source_path) do
       {:ok, content} ->
         case Jason.decode(content) do
           {:ok, document} ->
-            {:ok, %{document: document, source: source_path, format: "json"}}
+            {:ok, %{document: document, source: source_uri, format: "json"}}
 
           {:error, _reason} ->
             {:error, {"json_parse_error", display_path, content}}
@@ -214,8 +237,15 @@ defmodule Oasis.Spec.Document do
 
   defp normalize_local_path(path) do
     case URI.parse(path) do
-      %URI{scheme: nil} -> Path.expand(path)
-      _uri -> path
+      %URI{scheme: nil} ->
+        expanded = Path.expand(path)
+        {expanded, expanded}
+
+      %URI{scheme: "file", host: host, path: uri_path} when host in [nil, "", "localhost"] ->
+        {URI.decode(uri_path), path}
+
+      _uri ->
+        {path, path}
     end
   end
 

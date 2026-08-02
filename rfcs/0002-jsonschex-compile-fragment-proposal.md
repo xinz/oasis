@@ -200,7 +200,7 @@ require JSONSchex.Schema
 )
 ```
 
-Oasis should not add `:loader` by default. It should include `loader: &Oasis.Spec.Document.load_external/1` only when generation-time analysis determines the schema entrypoint can still reach unresolved external resources. If Oasis has already resolved or bundled the schema so compilation is self-contained, generated code should omit `:loader`.
+Generic JSONSchex callers may omit `:loader`. Oasis always passes its resolved default, custom, or explicitly disabled loader to generation-time bundling; JSONSchex invokes it only when the selected graph reaches an unresolved external resource. Generated code compiles the resulting standalone bundle without the source loader.
 
 ## Implemented Option Model
 
@@ -243,7 +243,7 @@ There is no top-level `:source` option in the implemented fragment API.
 
 An optional caller-provided loader for external resources.
 
-Callers should include this option only when external resource loading is actually needed. From the Oasis side, generated code should add `loader: &Oasis.Spec.Document.load_external/1` only after detecting that the schema entrypoint can still reach unresolved external file refs. If the schema has already been resolved, bundled, or otherwise made self-contained, Oasis should omit `:loader`.
+Generic callers may omit this option when no external loading is needed. Oasis does not perform a second reachability analysis: it passes the resolved loader to every generation-time bundling call and relies on JSONSchex to invoke it only for reachable unresolved resources. Generated compile-time code receives the standalone bundle and omits the source loader.
 
 The loader supports decoded JSON Schema resources and optional wrapper metadata:
 
@@ -256,7 +256,7 @@ The loader supports decoded JSON Schema resources and optional wrapper metadata:
 
 Wrapper metadata uses atom keys only. String keys such as `"document"` and `"base_uri"` are treated as normal decoded JSON content, not loader metadata.
 
-For Oasis, the loader reads local YAML/YML/JSON files and returns decoded maps. It is a conditional compile option, not part of every generated schema compile call.
+For Oasis, the default loader reads local YAML/YML/JSON files and returns decoded maps or boolean schemas with effective base metadata. It is supplied during generation-time bundling, not embedded into generated schema compile calls.
 
 ### Existing compile options
 
@@ -346,7 +346,7 @@ Example:
 {:ok, compiled} = JSONSchex.compile(standalone_schema)
 ```
 
-As with `compile_fragment/2`, callers should add `:loader` to `bundle_fragment/2` only if the fragment may need unresolved external resources during bundling.
+Generic callers may add `:loader` when external resources are possible. Oasis always supplies its resolved loader choice to this generation-time call; JSONSchex's reachable traversal decides whether it is invoked.
 
 Implemented bundling behavior:
 
@@ -449,7 +449,7 @@ Fragment code has been split out of `JSONSchex.Compiler`:
 Resolved in Oasis:
 
 1. Generated code uses `JSONSchex.Schema.compile!/2` over schemas prepared through `JSONSchex.bundle_fragment/2`.
-2. Oasis first attempts bundling without a loader, then retries with `loader: &Oasis.Spec.Document.load_external/1` when external resources are needed.
+2. Oasis makes one bundling call with a resolved loader (defaulting to `&Oasis.Spec.Document.load_external/1`); JSONSchex invokes it only for external resources reachable from the selected entrypoint.
 3. Oasis derives `:base_uri` from `Oasis.Spec.Document.source_path` during generation.
 4. Schema Object `$ref`s are preserved until JSONSchex fragment/bundle APIs process the schema entrypoint.
 
@@ -457,8 +457,8 @@ Resolved in the follow-up Oasis integration:
 
 1. Generation-time schema errors include entry pointer/ref and base URI context.
 2. Library callers can pass a custom JSONSchex-compatible `:loader` through Oasis generation options.
-3. Runtime JSON Schema validation errors carry Oasis source metadata when generated schemas include it.
-4. Oasis compacts bundled standalone schemas by keeping known JSON Schema document keywords plus the OpenAPI `components` context needed by preserved component refs.
+3. Runtime JSON Schema validation errors deliberately carry runtime input context and root-first JSON Pointers, not generation-time OpenAPI source metadata. Generation tooling can use `Mix.Oasis.Router.source_meta` for logical operation/input identity.
+4. Oasis preserves JSONSchex's standalone reachable bundle verbatim instead of curating JSON Schema keywords.
 
 Still open:
 
@@ -494,11 +494,11 @@ JSONSchex.bundle_fragment(document,
 )
 ```
 
-When Oasis detects unresolved external refs are still reachable from the entrypoint, it should add `loader: &Oasis.Spec.Document.load_external/1` to those options. When the schema is already resolved or bundled into a self-contained representation, Oasis should not include `:loader`.
+Oasis supplies the resolved default, custom, or explicitly disabled loader on every generation-time bundling call. JSONSchex invokes that loader only when the selected schema graph reaches an unresolved external resource. The generated compile-time code receives a standalone bundle and therefore does not need the source loader.
 
 ## Oasis Integration Decision
 
-For the first Oasis-side integration, Oasis uses `JSONSchex.bundle_fragment/2` during generation and then emits `JSONSchex.Schema.compile!/2` over the standalone bundled schema. This keeps generated modules compact and avoids embedding the full OpenAPI document per validator.
+For the first Oasis-side integration, Oasis uses `JSONSchex.bundle_fragment/2` during generation and then emits `JSONSchex.Schema.compile!/2` over the standalone bundled schema. Oasis preserves the returned bundle verbatim; JSONSchex may retain non-minimal containing-document context.
 
 Oasis does not normalize OpenAPI 3.1/3.2 Schema Objects before handing them to JSONSchex. JSONSchex owns JSON Schema Draft 2020-12 semantics and compatibility handling such as the pre-2019 `dependencies` keyword.
 

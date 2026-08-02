@@ -120,12 +120,49 @@ defmodule Oasis.Plug.RequestValidator do
     conn
   end
 
-  defp parse_and_validate_body_params(%{body_params: body_params, req_headers: req_headers}, body_schema) do
-    req_headers
-    |> find_content_type()
+  defp parse_and_validate_body_params(%{body_params: body_params, req_headers: req_headers} = conn, body_schema) do
+    content_type = find_content_type_and_downcase(req_headers)
+    value = request_body_value(conn, body_params, content_type)
+
+    content_type
     |> schema_may_match_by_request(body_schema)
-    |> Oasis.Validator.parse_and_validate!("body", "body_request", body_params)
+    |> Oasis.Validator.parse_and_validate!("body", "body_request", value)
   end
+
+  defp request_body_value(conn, %{"_json" => value} = wrapped, content_type)
+       when map_size(wrapped) == 1 do
+    if json_content_type?(content_type) and non_object_json_root?(conn), do: value, else: wrapped
+  end
+
+  defp request_body_value(_conn, body_params, _content_type), do: body_params
+
+  defp json_content_type?("application/json" <> _parameters), do: true
+
+  defp json_content_type?("application/" <> subtype) do
+    subtype
+    |> String.split(";", parts: 2)
+    |> hd()
+    |> String.trim()
+    |> String.ends_with?("+json")
+  end
+
+  defp json_content_type?(_content_type), do: false
+
+  defp non_object_json_root?(%{private: %{oasis_json_root: :non_object}}), do: true
+
+  defp non_object_json_root?(%{assigns: %{raw_body: chunks}}) when is_list(chunks) do
+    chunks
+    |> Enum.reverse()
+    |> IO.iodata_to_binary()
+    |> String.trim_leading()
+    |> case do
+      "" -> false
+      "{" <> _rest -> false
+      _non_object_json -> true
+    end
+  end
+
+  defp non_object_json_root?(_conn), do: false
 
   defp parse_and_validate(schemas, input_params, use_in) when is_map(input_params) do
     Enum.reduce(schemas, input_params, fn {param_name, definition}, acc ->
@@ -142,7 +179,7 @@ defmodule Oasis.Plug.RequestValidator do
     end)
   end
 
-  defp find_content_type(req_headers) do
+  defp find_content_type_and_downcase(req_headers) do
     case List.keyfind(req_headers, "content-type", 0) do
       {_, content} ->
         String.downcase(content)

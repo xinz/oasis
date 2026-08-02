@@ -93,6 +93,191 @@ defmodule Oasis.Spec.OpenAPIRefResolverTest do
            }
   end
 
+  test "resolves local Security Scheme refs" do
+    document = %{
+      "components" => %{
+        "securitySchemes" => %{
+          "BearerDefinition" => %{"type" => "http", "scheme" => "bearer"},
+          "BearerAuth" => %{"$ref" => "#/components/securitySchemes/BearerDefinition"}
+        }
+      }
+    }
+
+    resolved = OpenAPIRefResolver.resolve(document)
+
+    assert get_in(resolved, ["components", "securitySchemes", "BearerAuth"]) == %{
+             "type" => "http",
+             "scheme" => "bearer"
+           }
+  end
+
+  test "resolves valid x-prefixed Security Scheme component names" do
+    resolved =
+      OpenAPIRefResolver.resolve(%{
+        "components" => %{
+          "securitySchemes" => %{
+            "Target" => %{"type" => "http", "scheme" => "bearer"},
+            "x-alias" => %{"$ref" => "#/components/securitySchemes/Target"}
+          }
+        }
+      })
+
+    assert get_in(resolved, ["components", "securitySchemes", "x-alias"]) == %{
+             "type" => "http",
+             "scheme" => "bearer"
+           }
+  end
+
+  test "resolves external Security Scheme refs" do
+    base_uri = Path.expand("openapi.yaml", System.tmp_dir!())
+    external_uri = Path.expand("security.yaml", System.tmp_dir!())
+    parent = self()
+
+    loader = fn uri ->
+      send(parent, {:loaded_security_scheme, uri})
+
+      {:ok,
+       %{
+         document: %{"BearerAuth" => %{"type" => "http", "scheme" => "bearer"}},
+         base_uri: uri
+       }}
+    end
+
+    resolved =
+      OpenAPIRefResolver.resolve(
+        %{
+          "components" => %{
+            "securitySchemes" => %{
+              "BearerAuth" => %{"$ref" => "./security.yaml#/BearerAuth"}
+            }
+          }
+        },
+        base_uri: base_uri,
+        loader: loader
+      )
+
+    assert_received {:loaded_security_scheme, ^external_uri}
+
+    assert get_in(resolved, ["components", "securitySchemes", "BearerAuth"]) == %{
+             "type" => "http",
+             "scheme" => "bearer"
+           }
+  end
+
+  test "accepts a bare document from a custom JSONSchex loader" do
+    base_uri = Path.expand("openapi.yaml", System.tmp_dir!())
+
+    resolved =
+      OpenAPIRefResolver.resolve(
+        %{
+          "components" => %{
+            "securitySchemes" => %{
+              "BearerAuth" => %{"$ref" => "./security.yaml#/BearerAuth"}
+            }
+          }
+        },
+        base_uri: base_uri,
+        loader: fn _uri ->
+          {:ok, %{"BearerAuth" => %{"type" => "http", "scheme" => "bearer"}}}
+        end
+      )
+
+    assert get_in(resolved, ["components", "securitySchemes", "BearerAuth"]) == %{
+             "type" => "http",
+             "scheme" => "bearer"
+           }
+  end
+
+  test "includes the root source URI when an external Security Scheme target is not an object" do
+    base_uri = Path.expand("openapi.yaml", System.tmp_dir!())
+
+    loader = fn uri ->
+      {:ok, %{document: %{"BearerAuth" => false}, base_uri: uri}}
+    end
+
+    source = base_uri <> "#/components/securitySchemes/BearerAuth"
+
+    assert_raise Oasis.InvalidSpecError,
+                 ~r/#{Regex.escape(source)}.*must be an object.*false/,
+                 fn ->
+                   OpenAPIRefResolver.resolve(
+                     %{
+                       "components" => %{
+                         "securitySchemes" => %{
+                           "BearerAuth" => %{"$ref" => "./security.yaml#/BearerAuth"}
+                         }
+                       }
+                     },
+                     base_uri: base_uri,
+                     loader: loader
+                   )
+                 end
+  end
+
+  test "rejects non-object Reference Object targets with their logical source pointer" do
+    cases = [
+      {"#/paths/~1users", %{"paths" => %{"/users" => %{"$ref" => "#/target"}}, "target" => 42}},
+      {"#/paths/~1users%20special%25",
+       %{"paths" => %{"/users special%" => %{"$ref" => "#/target"}}, "target" => 42}},
+      {"#/paths/~1users/get/parameters/0",
+       %{
+         "paths" => %{"/users" => %{"get" => %{"parameters" => [%{"$ref" => "#/target"}]}}},
+         "target" => false
+       }},
+      {"#/paths/~1users/post/requestBody",
+       %{
+         "paths" => %{"/users" => %{"post" => %{"requestBody" => %{"$ref" => "#/target"}}}},
+         "target" => ["not", "an", "object"]
+       }},
+      {"#/paths/~1users/get/responses/200",
+       %{
+         "paths" => %{
+           "/users" => %{"get" => %{"responses" => %{"200" => %{"$ref" => "#/target"}}}}
+         },
+         "target" => "not an object"
+       }},
+      {"#/components/securitySchemes/BearerAuth",
+       %{
+         "components" => %{
+           "securitySchemes" => %{"BearerAuth" => %{"$ref" => "#/target"}}
+         },
+         "target" => nil
+       }}
+    ]
+
+    for {pointer, document} <- cases do
+      message = ~r/#{Regex.escape(pointer)}.*must be an object/
+
+      assert_raise Oasis.InvalidSpecError, message, fn ->
+        OpenAPIRefResolver.resolve(document)
+      end
+    end
+  end
+
+  test "preserves specification extensions in Responses Objects" do
+    extension = %{"$ref" => "#/target", "note" => "metadata"}
+
+    document = %{
+      "paths" => %{
+        "/users" => %{
+          "get" => %{
+            "responses" => %{
+              "200" => %{"description" => "ok"},
+              "x-scalar" => "metadata",
+              "x-object" => extension
+            }
+          }
+        }
+      },
+      "target" => %{"description" => "must not replace an extension"}
+    }
+
+    resolved = OpenAPIRefResolver.resolve(document)
+    responses = get_in(resolved, ["paths", "/users", "get", "responses"])
+
+    assert responses["x-scalar"] == "metadata"
+    assert responses["x-object"] == extension
+  end
 
   test "preserves external base for local schema refs nested inside external OpenAPI parameter refs" do
     root = Path.expand("file/external_openapi/schema_ref_root.yaml", __DIR__)
@@ -246,7 +431,9 @@ defmodule Oasis.Spec.OpenAPIRefResolverTest do
 
   describe "resolver error kinds" do
     test ":missing_target when local component ref does not exist" do
-      assert_raise Oasis.InvalidSpecError, ~r/Could not resolve OpenAPI ref/, fn ->
+      assert_raise Oasis.InvalidSpecError,
+                   ~r/Could not resolve OpenAPI ref.*at `#\/paths\/~1users\/get\/parameters\/0`/,
+                   fn ->
         OpenAPIRefResolver.resolve(%{
           "paths" => %{
             "/users" => %{

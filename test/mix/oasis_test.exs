@@ -71,8 +71,6 @@ defmodule Mix.OasisTest do
     source = get_in(router.source_meta, [:body_schema, "application/json"])
 
     assert Map.has_key?(schema, "$defs")
-    refute Map.has_key?(schema, "paths")
-    refute Map.has_key?(schema, "openapi")
     assert source.path == "/users"
     assert source.http_verb == "post"
     assert source.content_type == "application/json"
@@ -109,8 +107,6 @@ defmodule Mix.OasisTest do
     schema = get_in(router.body_schema, ["content", "application/json", "schema"])
 
     assert Map.has_key?(schema, "components")
-    refute Map.has_key?(schema, "paths")
-    refute Map.has_key?(schema, "openapi")
 
     # Depth-1 (sanity, original coverage).
     assert valid_schema?(schema, %{"name" => "root", "next" => %{"name" => "child"}})
@@ -150,7 +146,7 @@ defmodule Mix.OasisTest do
     refute valid_schema?(schema, deep_invalid)
   end
 
-  test "Mix.Oasis.new/2 resolves external OpenAPI refs and keeps schema validation working" do
+  test "Mix.Oasis.new/2 resolves external security refs and deeply rebases external Schema Object refs" do
     file_path = Path.expand("tasks/file/jsonschex_boundary/external_openapi_ref.yaml", __DIR__)
     %Oasis.Spec.Document{} = document = Oasis.Spec.read(file_path)
 
@@ -166,8 +162,21 @@ defmodule Mix.OasisTest do
     assert source.parameter_location == "path"
     assert source.parameter_name == "id"
 
+    # The direct ref contributes the integer type, while the ref nested under
+    # its `allOf` sibling contributes the minimum constraint. Both originate in
+    # the external OpenAPI document and must be rebased against that document.
     assert valid_schema?(schema, 123)
-    assert valid_schema?(schema, "123") == false
+    refute valid_schema?(schema, "123")
+    refute valid_schema?(schema, 99)
+
+    assert {_format, "lib/oasis/gen/user_bearer.ex", "bearer_token.ex.eex", Oasis.Gen.UserBearer, binding} =
+             Enum.find(files, fn {_format, _path, template, _module, _binding} ->
+               template == "bearer_token.ex.eex"
+             end)
+
+    assert [security] = binding.security
+    assert security =~ "Oasis.Plug.BearerAuth"
+    assert security =~ "security: Oasis.Gen.UserBearer"
   end
 
   test "Mix.Oasis.new/2 source_meta locates parameters against the raw OpenAPI document" do
@@ -188,6 +197,183 @@ defmodule Mix.OasisTest do
 
     assert [%{"$ref" => "./common.yaml#/components/parameters/UserId"}] =
              Map.fetch!(operation, "parameters")
+  end
+
+  test "Mix.Oasis.new/2 bundles refs against the unnormalized OpenAPI document" do
+    parameter_ref =
+      ExJSONPointer.encode_path(
+        ["paths", "/source/{id}", "get", "parameters", 0, "schema"],
+        format: "uri_fragment"
+      )
+
+    body_ref =
+      ExJSONPointer.encode_path(
+        [
+          "paths",
+          "/source/{id}",
+          "get",
+          "requestBody",
+          "content",
+          "application/json",
+          "schema"
+        ],
+        format: "uri_fragment"
+      )
+
+    spec = %{
+      "openapi" => "3.1.0",
+      "paths" => %{
+        "/source/{id}" => %{
+          "get" => %{
+            "operationId" => "source",
+            "parameters" => [
+              %{
+                "name" => "count",
+                "in" => "query",
+                "schema" => %{"type" => "integer"}
+              }
+            ],
+            "requestBody" => %{
+              "content" => %{
+                "application/json" => %{
+                  "schema" => %{
+                    "type" => "object",
+                    "required" => ["count"],
+                    "properties" => %{"count" => %{"type" => "integer"}}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/alias" => %{
+          "post" => %{
+            "operationId" => "alias",
+            "parameters" => [
+              %{
+                "name" => "count",
+                "in" => "query",
+                "schema" => %{"$ref" => parameter_ref}
+              }
+            ],
+            "requestBody" => %{
+              "content" => %{
+                "application/json" => %{
+                  "schema" => %{"$ref" => body_ref}
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    router = spec |> Mix.Oasis.new([]) |> pre_plug_router("alias")
+    parameter_schema = get_in(router.query_schema, ["count", "schema"])
+    body_schema = get_in(router.body_schema, ["content", "application/json", "schema"])
+
+    assert valid_schema?(parameter_schema, 123)
+    refute valid_schema?(parameter_schema, "123")
+    assert valid_schema?(body_schema, %{"count" => 123})
+    refute valid_schema?(body_schema, %{"count" => "123"})
+  end
+
+  test "Mix.Oasis.new/2 URI-fragment encodes schema entry pointer tokens" do
+    spec = %{
+      "paths" => %{
+        "/files/%2Fraw" => %{
+          "post" => %{
+            "operationId" => "encodedEntry",
+            "requestBody" => %{
+              "content" => %{
+                "application/json; charset=utf-8" => %{
+                  "schema" => %{"type" => "integer"}
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    router = spec |> Mix.Oasis.new([]) |> pre_plug_router("encodedEntry")
+
+    schema =
+      get_in(router.body_schema, ["content", "application/json; charset=utf-8", "schema"])
+
+    assert valid_schema?(schema, 123)
+    refute valid_schema?(schema, "123")
+  end
+
+  test "raw map generation uses a custom loader for structural OpenAPI refs" do
+    parent = self()
+    base_uri = "/virtual/openapi.yaml"
+
+    loader = fn uri ->
+      send(parent, {:raw_map_loader, uri})
+
+      {:ok,
+       %{
+         document: %{
+           "components" => %{
+             "requestBodies" => %{
+               "Body" => %{
+                 "content" => %{
+                   "application/json" => %{"schema" => %{"type" => "integer"}}
+                 }
+               }
+             }
+           }
+         },
+         base_uri: uri
+       }}
+    end
+
+    spec = %{
+      "paths" => %{
+        "/value" => %{
+          "post" => %{
+            "operationId" => "customLoader",
+            "requestBody" => %{"$ref" => "./common.yaml#/components/requestBodies/Body"}
+          }
+        }
+      }
+    }
+
+    router =
+      spec
+      |> Mix.Oasis.new(base_uri: base_uri, loader: loader)
+      |> pre_plug_router("customLoader")
+
+    assert_received {:raw_map_loader, "/virtual/common.yaml"}
+    schema = get_in(router.body_schema, ["content", "application/json", "schema"])
+    assert valid_schema?(schema, 123)
+    refute valid_schema?(schema, "123")
+  end
+
+  test "raw map generation resolves referenced security schemes" do
+    spec = %{
+      "components" => %{
+        "securitySchemes" => %{
+          "BearerTarget" => %{"type" => "http", "scheme" => "bearer"},
+          "BearerAlias" => %{"$ref" => "#/components/securitySchemes/BearerTarget"}
+        }
+      },
+      "security" => [%{"BearerAlias" => []}],
+      "paths" => %{
+        "/secure" => %{"get" => %{"operationId" => "secure"}}
+      }
+    }
+
+    files = Mix.Oasis.new(spec, [])
+    router = pre_plug_router(files, "secure")
+
+    assert [security_plug] = router.security
+    assert security_plug =~ "Oasis.Plug.BearerAuth"
+    assert security_plug =~ "security: Oasis.Gen.BearerAlias"
+    assert Enum.any?(files, fn {_format, _path, template, _module, _binding} ->
+             template == "bearer_token.ex.eex"
+           end)
   end
 
   describe "render_embedded_schemas/1" do
@@ -236,14 +422,20 @@ defmodule Mix.OasisTest do
         "schema" => %{"type" => "integer", "minimum" => 1}
       }
 
-      rendered = Mix.Oasis.render_embedded_schemas(param)
+      rendered = Mix.Oasis.render_parameter_schemas(%{"id" => param})
 
       assert rendered =~ "JSONSchex.Schema.compile!"
 
       result = eval_rendered(rendered)
 
-      assert %{"name" => "id", "in" => "path", "required" => true, "schema" => compiled} =
-               result
+      assert %{
+               "id" => %{
+                 "name" => "id",
+                 "in" => "path",
+                 "required" => true,
+                 "schema" => compiled
+               }
+             } = result
 
       assert %JSONSchex.Types.Schema{} = compiled
       assert JSONSchex.validate(compiled, 5) == :ok
@@ -252,11 +444,11 @@ defmodule Mix.OasisTest do
     end
 
     test "renders a map with a boolean \"schema\" value through JSONSchex.Schema.compile!/2" do
-      rendered = Mix.Oasis.render_embedded_schemas(%{"schema" => true})
+      rendered = Mix.Oasis.render_parameter_schemas(%{"flag" => %{"schema" => true}})
 
       assert rendered =~ "JSONSchex.Schema.compile!"
 
-      %{"schema" => compiled} = eval_rendered(rendered)
+      %{"flag" => %{"schema" => compiled}} = eval_rendered(rendered)
 
       assert %JSONSchex.Types.Schema{} = compiled
       # `true` schema accepts anything.
@@ -265,18 +457,18 @@ defmodule Mix.OasisTest do
     end
 
     test "renders a map with a \"false\" schema value as a schema that rejects everything" do
-      rendered = Mix.Oasis.render_embedded_schemas(%{"schema" => false})
+      rendered = Mix.Oasis.render_parameter_schemas(%{"flag" => %{"schema" => false}})
 
-      %{"schema" => compiled} = eval_rendered(rendered)
+      %{"flag" => %{"schema" => compiled}} = eval_rendered(rendered)
 
       assert %JSONSchex.Types.Schema{} = compiled
       assert {:error, _} = JSONSchex.validate(compiled, 1)
       assert {:error, _} = JSONSchex.validate(compiled, nil)
     end
 
-    test "raises ArgumentError when a \"schema\" value is neither map, boolean, nor compiled schema" do
-      assert_raise ArgumentError, ~r/expected nested "schema" value/, fn ->
-        Mix.Oasis.render_embedded_schemas(%{"schema" => "not a schema"})
+    test "raises ArgumentError when a direct \"schema\" value is neither map, boolean, nor compiled schema" do
+      assert_raise ArgumentError, ~r/expected direct "schema" value/, fn ->
+        Mix.Oasis.render_parameter_schemas(%{"bad" => %{"schema" => "not a schema"}})
       end
     end
 
@@ -315,79 +507,54 @@ defmodule Mix.OasisTest do
       assert {:error, _} = JSONSchex.validate(recompiled, -1)
     end
 
-    test "recurses into lists and preserves order" do
-      params = [
-        %{"name" => "a", "schema" => %{"type" => "string"}},
-        %{"name" => "b", "schema" => %{"type" => "integer"}}
+    test "keeps arbitrary schema-named list and tuple metadata as data" do
+      metadata = [
+        %{"schema" => "business-value"},
+        {"query", %{"schema" => %{"type" => "integer"}}}
       ]
 
-      rendered = Mix.Oasis.render_embedded_schemas(params)
+      rendered = Mix.Oasis.render_embedded_schemas(metadata)
 
-      [first, second] = eval_rendered(rendered)
-
-      assert %{"name" => "a", "schema" => %JSONSchex.Types.Schema{} = s1} = first
-      assert %{"name" => "b", "schema" => %JSONSchex.Types.Schema{} = s2} = second
-
-      assert JSONSchex.validate(s1, "ok") == :ok
-      assert {:error, _} = JSONSchex.validate(s1, 1)
-      assert JSONSchex.validate(s2, 1) == :ok
-      assert {:error, _} = JSONSchex.validate(s2, "nope")
+      refute rendered =~ "JSONSchex.Schema.compile!"
+      assert eval_rendered(rendered) == metadata
     end
 
-    test "recurses into tuples" do
-      rendered =
-        Mix.Oasis.render_embedded_schemas(
-          {"query", %{"schema" => %{"type" => "integer"}}}
-        )
-
-      assert {"query", %{"schema" => %JSONSchex.Types.Schema{} = compiled}} =
-               eval_rendered(rendered)
-
-      assert JSONSchex.validate(compiled, 7) == :ok
-      assert {:error, _} = JSONSchex.validate(compiled, "nope")
-    end
-
-    test "renders a router-shaped container with mixed parameter and body schemas" do
+    test "preserves schema-named fields inside media type metadata as ordinary data" do
       container = %{
-        "query" => %{
-          "page" => %{
-            "name" => "page",
-            "in" => "query",
-            "schema" => %{"type" => "integer", "minimum" => 1}
-          }
-        },
-        "body" => %{
+        "content" => %{
           "application/json" => %{
-            "schema" => %{
-              "type" => "object",
-              "required" => ["name"],
-              "properties" => %{"name" => %{"type" => "string"}}
-            }
+            "schema" => %{"type" => "object"},
+            "example" => %{"schema" => "business-value"},
+            "x-payload" => %{"nested" => %{"schema" => %{"type" => "string"}}}
           }
         }
       }
 
-      rendered = Mix.Oasis.render_embedded_schemas(container)
+      rendered = Mix.Oasis.render_body_schema(container)
+      result = eval_rendered(rendered)
+      media = get_in(result, ["content", "application/json"])
+
+      assert %JSONSchex.Types.Schema{} = media["schema"]
+      assert media["example"] == %{"schema" => "business-value"}
+      assert media["x-payload"] == %{"nested" => %{"schema" => %{"type" => "string"}}}
+    end
+
+    test "parameter names schema and content do not change rendering context" do
+      parameters = %{
+        "schema" => %{"name" => "schema", "schema" => %{"type" => "integer"}},
+        "content" => %{"name" => "content", "schema" => %{"type" => "string"}}
+      }
+
+      rendered = Mix.Oasis.render_parameter_schemas(parameters)
       result = eval_rendered(rendered)
 
-      assert %{
-               "query" => %{
-                 "page" => %{
-                   "name" => "page",
-                   "in" => "query",
-                   "schema" => %JSONSchex.Types.Schema{} = page_schema
-                 }
-               },
-               "body" => %{
-                 "application/json" => %{"schema" => %JSONSchex.Types.Schema{} = body_schema}
-               }
-             } = result
-
-      assert JSONSchex.validate(page_schema, 1) == :ok
-      assert {:error, _} = JSONSchex.validate(page_schema, 0)
-
-      assert JSONSchex.validate(body_schema, %{"name" => "x"}) == :ok
-      assert {:error, _} = JSONSchex.validate(body_schema, %{})
+      assert %{"schema" => %{"schema" => integer}, "content" => %{"schema" => string}} = result
+      assert %JSONSchex.Types.Schema{} = integer
+      assert %JSONSchex.Types.Schema{} = string
+      assert JSONSchex.validate(integer, 1) == :ok
+      assert {:error, _} = JSONSchex.validate(integer, "1")
+      assert JSONSchex.validate(string, "value") == :ok
+      assert {:error, _} = JSONSchex.validate(string, 1)
     end
   end
 
@@ -740,7 +907,7 @@ defmodule Mix.OasisTest do
       |> Mix.Oasis.new([])
       |> pre_plug_router("createUser")
 
-    rendered = Mix.Oasis.render_embedded_schemas(router.body_schema)
+    rendered = Mix.Oasis.render_body_schema(router.body_schema)
 
     refute rendered =~ "x-oasis-source"
   end
@@ -797,9 +964,9 @@ defmodule Mix.OasisTest do
                  end
   end
 
-  test "prepare_json_schema!/2 accepts `loader: nil` for self-contained schemas" do
-    # `loader: nil` explicitly disables the default external loader. For
-    # self-contained schemas (no external $refs) this must remain a no-op.
+  test "prepare_json_schema!/2 ignores unreachable missing external components" do
+    # RFC 0005 scopes bundling to refs reachable from the selected entrypoint.
+    # An unrelated missing component must therefore never reach the loader.
     schema = %{
       "type" => "object",
       "required" => ["name"],
@@ -807,6 +974,11 @@ defmodule Mix.OasisTest do
     }
 
     root_spec = %{
+      "components" => %{
+        "schemas" => %{
+          "Unused" => %{"$ref" => "./missing.yaml"}
+        }
+      },
       "paths" => %{
         "/users" => %{
           "post" => %{
@@ -822,11 +994,12 @@ defmodule Mix.OasisTest do
       Mix.Oasis.prepare_json_schema!(schema,
         root_spec: root_spec,
         entry: "#/paths/~1users/post/requestBody/content/application~1json/schema",
+        base_uri: "/tmp/api/openapi.yaml",
         loader: nil
       )
 
     assert valid_schema?(prepared, %{"name" => "Ada"})
-    assert valid_schema?(prepared, %{}) == false
+    refute valid_schema?(prepared, %{})
   end
 
   test "prepare_json_schema!/2 with `loader: nil` surfaces external ref errors" do
@@ -910,42 +1083,27 @@ defmodule Mix.OasisTest do
     refute valid_schema?(prepared, %{"age" => 42})
   end
 
-  test "prepare_json_schema!/2 compaction retains components and drops top-level OpenAPI keys" do
-    {:ok, root_spec} =
-      YamlElixir.read_from_string("""
-      openapi: 3.1.0
-      info:
-        title: Compaction Policy
-        version: 1.0.0
-      servers:
-        - url: https://example.com
-      tags:
-        - name: users
-      externalDocs:
-        url: https://example.com/docs
-      webhooks: {}
-      components:
-        schemas:
-          Unused:
-            type: string
-      paths:
-        /users:
-          post:
-            operationId: createUser
-            requestBody:
-              required: true
-              content:
-                application/json:
-                  schema:
-                    type: object
-                    required:
-                      - name
-                    properties:
-                      name:
-                        type: string
-      """)
+  test "prepare_json_schema!/2 preserves custom vocabulary and OpenAPI annotation keywords" do
+    schema = %{
+      "type" => "object",
+      "x-acme-vocabulary" => %{"audit" => true},
+      "example" => %{"name" => "Ada"},
+      "discriminator" => %{"propertyName" => "kind"},
+      "xml" => %{"name" => "user"},
+      "properties" => %{"name" => %{"type" => "string"}}
+    }
 
-    schema = get_in(root_spec, ["paths", "/users", "post", "requestBody", "content", "application/json", "schema"])
+    root_spec = %{
+      "paths" => %{
+        "/users" => %{
+          "post" => %{
+            "requestBody" => %{
+              "content" => %{"application/json" => %{"schema" => schema}}
+            }
+          }
+        }
+      }
+    }
 
     prepared =
       Mix.Oasis.prepare_json_schema!(schema,
@@ -953,15 +1111,11 @@ defmodule Mix.OasisTest do
         entry: "#/paths/~1users/post/requestBody/content/application~1json/schema"
       )
 
-    # (a) `components` is always retained, even when no surviving Schema Object
-    # references `#/components/schemas/...`.
-    assert Map.has_key?(prepared, "components")
-
-    # (b) Top-level OpenAPI document keys are dropped from the bundled schema.
-    for dropped <- ["info", "servers", "tags", "webhooks", "externalDocs", "paths", "openapi"] do
-      refute Map.has_key?(prepared, dropped),
-             "expected bundled schema to drop top-level OpenAPI key #{inspect(dropped)}, got keys: #{inspect(Map.keys(prepared))}"
-    end
+    assert prepared["x-acme-vocabulary"] == %{"audit" => true}
+    assert prepared["example"] == %{"name" => "Ada"}
+    assert prepared["discriminator"] == %{"propertyName" => "kind"}
+    assert prepared["xml"] == %{"name" => "user"}
+    assert valid_schema?(prepared, %{"name" => "Ada"})
   end
 
   test "Mix.Oasis.new/2 invalid spec" do
@@ -1129,6 +1283,39 @@ defmodule Mix.OasisTest do
       {_, _, _, _, binding} = plug_file
       assert binding.body_schema == nil
     end)
+  end
+
+  test "Mix.Oasis.new/2 prepares Parameter Objects that use content" do
+    operation = %{
+      "operationId" => "contentParameter",
+      "parameters" => %{
+        "query" => [
+          %{
+            "name" => "filter",
+            "required" => true,
+            "content" => %{
+              "application/json" => %{
+                "schema" => %{"type" => "integer"},
+                "example" => 10
+              }
+            }
+          }
+        ]
+      }
+    }
+
+    paths_spec = %{"paths" => %{"/test" => %{"get" => operation}}}
+    router = paths_spec |> Mix.Oasis.new([]) |> pre_plug_router("contentParameter")
+    definition = router.query_schema["filter"]
+    media = get_in(definition, ["content", "application/json"])
+
+    assert definition["required"] == true
+    assert media["example"] == 10
+    assert valid_schema?(media["schema"], 10)
+    refute valid_schema?(media["schema"], "10")
+
+    compiled_definition = put_in(definition, ["content", "application/json", "schema"], Oasis.Test.JSONSchema.compile!(media["schema"]))
+    assert Oasis.Validator.parse_and_validate!(compiled_definition, "query", "filter", "10") == 10
   end
 
   test "Mix.Oasis.new/2 skip missing-schema/-name in parameter" do

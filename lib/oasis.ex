@@ -47,9 +47,9 @@ defmodule Oasis do
       ## Fields
 
       - `:error` - the underlying `t:JSONSchex.Types.Error.t/0`.
-      - `:path` - a JSON Pointer string addressing the offending value inside the
-        request payload, e.g. `"#/name"`. Pointer segments are escaped per
-        RFC 6901 (`~` → `~0`, `/` → `~1`).
+      - `:path` - a URI-fragment JSON Pointer addressing the offending value
+        inside the request payload, e.g. `"#/name"`. Pointer segments use RFC
+        6901 escaping (`~` → `~0`, `/` → `~1`) followed by URI percent-encoding.
 
       Generated Oasis modules do not embed OpenAPI source metadata at runtime;
       the route/parameter context that produced this error is already available

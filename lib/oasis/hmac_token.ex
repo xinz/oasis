@@ -55,9 +55,8 @@ defmodule Oasis.HMACToken do
     end
 
     defp parse_header_date(str) when is_binary(str) do
-      with {:ok, datetime} <- Timex.parse(str, "%a, %d %b %Y %H:%M:%S GMT", :strftime),
-           timestamp when is_integer(timestamp) <- Timex.to_unix(datetime) do
-        {:ok, timestamp}
+      with {:ok, datetime, 0} <- DateTime.from_iso8601(str) do
+        {:ok, DateTime.to_unix(datetime)}
       end
     end
 

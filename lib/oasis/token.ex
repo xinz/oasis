@@ -78,6 +78,7 @@ defmodule Oasis.Token do
 
   - `"expired"`
   - `"invalid"`
+  - `"missing"`
 
   Elixir typespecs cannot enumerate string literals directly, so this remains
   `String.t()` at the type level and the fixed set is documented here.

@@ -5,9 +5,54 @@ defmodule Mix.Tasks.Oas.Gen.PlugTest do
   import Oasis.MixHelper
   alias Mix.Tasks.Oas.Gen
 
+  @jsonschex_boundary_dir Path.expand("file/jsonschex_boundary", __DIR__)
+
   setup do
     Mix.Task.clear()
     :ok
+  end
+
+  defp with_compiled_files(paths, fun) do
+    do_with_compiled_files(paths, [], fun)
+  end
+
+  defp do_with_compiled_files([], modules, fun) do
+    try do
+      fun.(modules)
+    after
+      unload_modules(modules)
+    end
+  end
+
+  defp do_with_compiled_files([path | paths], modules, fun) do
+    compiled_modules =
+      try do
+        path
+        |> Code.compile_file()
+        |> Enum.map(&elem(&1, 0))
+      rescue
+        exception ->
+          unload_modules(modules)
+          reraise exception, __STACKTRACE__
+      end
+
+    do_with_compiled_files(paths, compiled_modules ++ modules, fun)
+  end
+
+  defp unload_modules(modules) do
+    Enum.each(Enum.uniq(modules), fn module ->
+      :code.purge(module)
+      :code.delete(module)
+    end)
+  end
+
+  defp call_generated_router(router_module, request_path, body) do
+    conn =
+      Plug.Test.conn(:post, request_path, Jason.encode!(body))
+      |> Plug.Conn.put_req_header("content-type", "application/json")
+
+    opts = apply(router_module, :init, [[]])
+    apply(router_module, :call, [conn, opts])
   end
 
   test("run in root of an umbrella project", config) do
@@ -112,6 +157,105 @@ defmodule Mix.Tasks.Oas.Gen.PlugTest do
       assert_file("lib/oasis/gen/delete_pet.ex")
       assert_file("lib/oasis/gen/pre_find_pets.ex")
       assert_file("lib/oasis/gen/find_pets.ex")
+    end)
+  end
+
+  test "generated external and recursive schemas compile and execute", %{test: test_name} do
+    boundaries = [
+      %{
+        fixture: "external_schema.yaml",
+        namespace: "Oasis.GeneratedBoundary.External",
+        operation: "create_user",
+        request_path: "/users",
+        valid: %{"name" => "Ada", "age" => 42},
+        invalid: %{"age" => 42}
+      },
+      %{
+        fixture: "recursive_schema.yaml",
+        namespace: "Oasis.GeneratedBoundary.Recursive",
+        operation: "create_node",
+        request_path: "/nodes",
+        valid: %{
+          "name" => "l0",
+          "next" => %{
+            "name" => "l1",
+            "next" => %{
+              "name" => "l2",
+              "next" => %{"name" => "l3"}
+            }
+          }
+        },
+        invalid: %{
+          "name" => "l0",
+          "next" => %{
+            "name" => "l1",
+            "next" => %{
+              "name" => "l2",
+              "next" => %{"next" => %{"name" => "l4"}}
+            }
+          }
+        }
+      }
+    ]
+
+    Enum.each(boundaries, fn boundary ->
+      in_tmp_project("#{test_name}_#{boundary.operation}", fn ->
+        fixture_path = Path.join(@jsonschex_boundary_dir, boundary.fixture)
+
+        Gen.Plug.run([
+          "--file",
+          fixture_path,
+          "--name-space",
+          boundary.namespace,
+          "--force",
+          "--quiet"
+        ])
+
+        generated_dir =
+          boundary.namespace
+          |> String.split(".")
+          |> Enum.map(&Macro.underscore/1)
+          |> then(&Path.join(["lib" | &1]))
+
+        handler_path = Path.join(generated_dir, "#{boundary.operation}.ex")
+        pre_path = Path.join(generated_dir, "pre_#{boundary.operation}.ex")
+        router_path = Path.join(generated_dir, "router.ex")
+        source_paths = [handler_path, pre_path, router_path]
+
+        assert Enum.sort(Path.wildcard(Path.join(generated_dir, "*.ex"))) == Enum.sort(source_paths)
+
+        sources = Map.new(source_paths, &{&1, File.read!(&1)})
+
+        assert Enum.filter(source_paths, &(sources[&1] =~ "require JSONSchex.Schema")) == [pre_path]
+        assert Enum.filter(source_paths, &(sources[&1] =~ "JSONSchex.Schema.compile!")) == [pre_path]
+
+        namespace_module = boundary.namespace |> String.split(".") |> Module.concat()
+        handler_module = Module.concat(namespace_module, Macro.camelize(boundary.operation))
+        pre_module = Module.concat(namespace_module, "Pre" <> Macro.camelize(boundary.operation))
+        router_module = Module.concat(namespace_module, "Router")
+        expected_modules = [handler_module, pre_module, router_module]
+
+        with_compiled_files(source_paths, fn compiled_modules ->
+          assert MapSet.new(compiled_modules) == MapSet.new(expected_modules)
+
+          assert %Plug.Conn{halted: true, body_params: valid_body} =
+                   call_generated_router(router_module, boundary.request_path, boundary.valid)
+
+          assert valid_body == boundary.valid
+
+          wrapper =
+            assert_raise Plug.Conn.WrapperError, ~r/Failed to validate JSON schema/, fn ->
+              call_generated_router(router_module, boundary.request_path, boundary.invalid)
+            end
+
+          assert %Oasis.BadRequestError{} = wrapper.reason
+          assert_receive {:plug_conn, :sent}
+        end)
+
+        Enum.each(expected_modules, fn module ->
+          assert :code.is_loaded(module) == false
+        end)
+      end)
     end)
   end
 

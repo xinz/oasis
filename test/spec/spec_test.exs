@@ -32,6 +32,25 @@ defmodule Oasis.Spec.SpecTest do
            }
   end
 
+  test "returns structural OpenAPI resolver failures as error tuples" do
+    path =
+      Path.join(
+        System.tmp_dir!(),
+        "oasis_invalid_openapi_ref_#{System.unique_integer([:positive])}.yaml"
+      )
+
+    File.write!(path, """
+    paths:
+      /users:
+        $ref: '#/components/pathItems/Missing'
+    """)
+
+    on_exit(fn -> File.rm(path) end)
+
+    assert {:error, %Oasis.InvalidSpecError{message: message}} = Oasis.Spec.read(path)
+    assert message =~ "Could not resolve OpenAPI ref"
+  end
+
   test "input invalid path" do
     {:error, %Oasis.FileNotFoundError{message: message}} = Oasis.Spec.read("unknown.yaml")
     assert message =~ ~s/Failed to open file "unknown.yaml"/

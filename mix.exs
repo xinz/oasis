@@ -6,20 +6,15 @@ defmodule Oasis.MixProject do
   def project do
     [
       app: :oasis,
-      version: "0.6.0",
+      version: "0.7.0",
       elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       docs: docs(),
       description: description(),
       package: package(),
-      elixirc_paths: elixirc_paths(Mix.env()),
-      test_coverage: [tool: ExCoveralls]
+      elixirc_paths: elixirc_paths(Mix.env())
     ]
-  end
-
-  def cli do
-    [preferred_envs: [coveralls: :test, "coveralls.detail": :test, "coveralls.post": :test, "coveralls.html": :test]]
   end
 
   # Run "mix help compile.app" to learn about applications.
@@ -40,7 +35,7 @@ defmodule Oasis.MixProject do
       {:plug, "~> 1.11"},
       {:plug_crypto, "~> 1.2"},
       {:jason, "~> 1.2"},
-      {:jsonschex, "~> 0.8.1"},
+      {:jsonschex, "~> 0.9.0"},
       {:recase, "~> 0.7", runtime: false},
       {:plug_cowboy, "~> 2.0", only: [:dev, :test]},
       {:cowboy, "~> 2.12.0", only: [:dev, :test]},
@@ -51,7 +46,15 @@ defmodule Oasis.MixProject do
 
   defp package do
     [
-      files: ["lib", "mix.exs", "README.md", "LICENSE.md", "priv/templates"],
+      files: [
+        "lib",
+        "mix.exs",
+        "README.md",
+        "CHANGELOG.md",
+        "LICENSE.md",
+        "guides",
+        "priv/templates"
+      ],
       licenses: ["MIT"],
       links: %{
         "GitHub" => @source_url
@@ -68,6 +71,7 @@ defmodule Oasis.MixProject do
         "README.md",
         "CHANGELOG.md",
         "guides/handle_errors.md",
+        "guides/migrating_to_0_7.md",
         "guides/specification_ext.md",
         "guides/hmac_based_authentication.md",
       ],

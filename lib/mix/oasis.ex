@@ -5,99 +5,38 @@ defmodule Mix.Oasis do
 
   @jsonschex_compile_options [format_assertion: true, content_assertion: false]
 
-  @json_schema_document_keywords [
-    "$id",
-    "$schema",
-    "$ref",
-    "$anchor",
-    "$dynamicRef",
-    "$dynamicAnchor",
-    "$vocabulary",
-    "$comment",
-    "$defs",
-    "definitions",
-    "type",
-    "enum",
-    "const",
-    "multipleOf",
-    "maximum",
-    "exclusiveMaximum",
-    "minimum",
-    "exclusiveMinimum",
-    "maxLength",
-    "minLength",
-    "pattern",
-    "maxItems",
-    "minItems",
-    "uniqueItems",
-    "maxContains",
-    "minContains",
-    "maxProperties",
-    "minProperties",
-    "required",
-    "dependentRequired",
-    "dependencies",
-    "prefixItems",
-    "items",
-    "contains",
-    "additionalProperties",
-    "properties",
-    "patternProperties",
-    "dependentSchemas",
-    "propertyNames",
-    "if",
-    "then",
-    "else",
-    "allOf",
-    "anyOf",
-    "oneOf",
-    "not",
-    "unevaluatedItems",
-    "unevaluatedProperties",
-    "format",
-    "contentEncoding",
-    "contentMediaType",
-    "contentSchema",
-    "title",
-    "description",
-    "default",
-    "deprecated",
-    "readOnly",
-    "writeOnly",
-    "examples"
-  ]
-
-  # OpenAPI keywords that may carry referenced context inside a bundled
-  # standalone schema. `components` is retained unconditionally rather than
-  # scanning the bundled graph for `$ref`s pointing into `#/components/...`:
-  # the scan would add non-trivial complexity for no observable behavioral
-  # benefit (JSONSchex tolerates unreferenced sibling keys, and OpenAPI
-  # documents typically already include `components`). See RFC 0001
-  # "Resolved follow-up #4".
-  @bundled_schema_context_keywords [
-    "components"
-  ]
-
-  @bundled_schema_document_keys @bundled_schema_context_keywords ++ @json_schema_document_keywords
-
-  def new(%Document{schema: %{"paths" => paths} = spec, source_path: source_path, url_aliases: url_aliases}, opts)
+  def new(
+        %Document{
+          schema: %{"paths" => paths} = spec,
+          reference_schema: reference_schema,
+          source_path: source_path,
+          url_aliases: url_aliases,
+          schema_sources: schema_sources
+        },
+        opts
+      )
       when is_map(paths) do
     opts =
       opts
-      |> Keyword.put_new(:root_spec, spec)
+      |> Keyword.put_new(:root_spec, reference_schema || spec)
       |> Keyword.put_new(:base_uri, source_path)
       |> Keyword.put_new(:url_aliases, url_aliases)
+      |> Keyword.put_new(:schema_sources, schema_sources)
 
     Mix.Oasis.Router.generate_files_by_paths_spec(generator_paths(), spec, opts)
   end
 
   def new(%{"paths" => paths} = spec, opts) when is_map(paths) do
-    opts =
-      opts
-      |> Keyword.put_new(:root_spec, spec)
-      |> Keyword.put_new(:url_aliases, %{})
+    source_path = opts[:base_uri]
+    resolver_opts = Keyword.take(opts, [:base_uri, :loader])
+    resolved = Oasis.Spec.OpenAPIRefResolver.resolve(spec, resolver_opts)
 
-    Mix.Oasis.Router.generate_files_by_paths_spec(generator_paths(), spec, opts)
+    document =
+      resolved
+      |> Document.new(source_path: source_path)
+      |> Oasis.Spec.Path.build()
+
+    new(document, opts)
   end
 
   def new(spec, _opts) do
@@ -225,11 +164,26 @@ defmodule Mix.Oasis do
   end
 
   @doc """
-  Renders nested schema containers into AST-friendly source for generated modules.
+  Renders data containing already-compiled JSONSchex schemas into AST-friendly
+  source. Raw maps remain ordinary data regardless of their key names.
   """
   def render_embedded_schemas(term) do
     term
     |> schema_container_to_ast()
+    |> Macro.to_string()
+  end
+
+  @doc false
+  def render_parameter_schemas(parameters) when is_map(parameters) do
+    parameters
+    |> map_to_ast(&parameter_definition_to_ast/1)
+    |> Macro.to_string()
+  end
+
+  @doc false
+  def render_body_schema(body) when is_map(body) do
+    body
+    |> content_definition_to_ast()
     |> Macro.to_string()
   end
 
@@ -311,25 +265,19 @@ defmodule Mix.Oasis do
 
     case JSONSchex.bundle_fragment(root_spec, fragment_opts) do
       {:ok, bundled} ->
-        compact_bundled_schema(bundled)
+        bundled
 
       {:error, error} ->
         raise_json_schema_error!(error, opts, "bundle JSON Schema fragment")
     end
   end
 
-  defp compact_bundled_schema(%{} = schema) do
-    Map.take(schema, @bundled_schema_document_keys)
-  end
-
-  defp compact_bundled_schema(schema), do: schema
-
   defp schema_container_to_ast(%JSONSchex.Types.Schema{} = schema) do
     compile_schema_ast(schema.raw, compile_options_from_compiled(schema))
   end
 
   defp schema_container_to_ast(%{} = map) do
-    {:%{}, [], map |> Enum.sort_by(&entry_sort_key/1) |> Enum.map(&schema_map_entry_to_ast/1)}
+    map_to_ast(map, &schema_container_to_ast/1)
   end
 
   defp schema_container_to_ast(list) when is_list(list) do
@@ -347,21 +295,65 @@ defmodule Mix.Oasis do
     Macro.escape(value)
   end
 
-  defp schema_map_entry_to_ast({"schema", %JSONSchex.Types.Schema{} = schema}) do
-    {Macro.escape("schema"), compile_schema_ast(schema.raw, compile_options_from_compiled(schema))}
+  defp parameter_definition_to_ast(%{"schema" => _schema} = definition) do
+    schema_definition_to_ast(definition)
   end
 
-  defp schema_map_entry_to_ast({"schema", schema}) when is_map(schema) or is_boolean(schema) do
-    {Macro.escape("schema"), compile_schema_ast(schema, schema_compile_options())}
+  defp parameter_definition_to_ast(%{"content" => content} = definition) when is_map(content) do
+    content_definition_to_ast(definition)
   end
 
-  defp schema_map_entry_to_ast({"schema", schema}) do
-    raise ArgumentError,
-          "expected nested \"schema\" value to be a map, boolean, or compiled JSONSchex.Types.Schema, got: #{inspect(schema, pretty: true)}"
+  defp parameter_definition_to_ast(definition), do: Macro.escape(definition)
+
+  defp schema_definition_to_ast(definition) do
+    map_to_ast(definition, fn
+      %JSONSchex.Types.Schema{} = schema ->
+        compile_schema_ast(schema.raw, compile_options_from_compiled(schema))
+
+      schema when is_map(schema) or is_boolean(schema) ->
+        compile_schema_ast(schema, schema_compile_options())
+
+      schema ->
+        raise ArgumentError,
+              "expected direct \"schema\" value to be a map, boolean, or compiled JSONSchex.Types.Schema, got: #{inspect(schema, pretty: true)}"
+    end, only_key: "schema")
   end
 
-  defp schema_map_entry_to_ast({key, value}) do
-    {Macro.escape(key), schema_container_to_ast(value)}
+  defp content_definition_to_ast(definition) do
+    map_to_ast(definition, fn content ->
+      map_to_ast(content, fn
+        %{} = media -> schema_definition_or_data_to_ast(media)
+        media -> Macro.escape(media)
+      end)
+    end, only_key: "content")
+  end
+
+  defp schema_definition_or_data_to_ast(%{"schema" => _schema} = media) do
+    schema_definition_to_ast(media)
+  end
+
+  defp schema_definition_or_data_to_ast(media), do: Macro.escape(media)
+
+  defp map_to_ast(map, value_to_ast, opts \\ []) do
+    only_key = Keyword.get(opts, :only_key)
+
+    entries =
+      map
+      |> Enum.sort_by(&entry_sort_key/1)
+      |> Enum.map(fn {key, value} ->
+        value_ast =
+          if only_key == nil or key == only_key do
+            value_to_ast.(value)
+          else
+            # Once a known schema-bearing OpenAPI object is identified, all of
+            # its other fields are metadata and must remain ordinary data.
+            Macro.escape(value)
+          end
+
+        {Macro.escape(key), value_ast}
+      end)
+
+    {:%{}, [], entries}
   end
 
   defp compile_schema_ast(schema, opts) do

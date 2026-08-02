@@ -227,8 +227,7 @@ defmodule Oasis.IntegrationTest do
              |> Finch.request(TestFinch)
 
     assert response.status == 400 and
-             response.body ==
-               "Find query parameter `profile` with error: Type mismatch. Expected Integer but got String."
+             response.body == "Failed to convert parameter"
   end
 
   test "parse array header parameter", %{url: url} do
@@ -259,8 +258,7 @@ defmodule Oasis.IntegrationTest do
              Finch.build(:get, "#{url}/test_header", headers) |> Finch.request(TestFinch)
 
     assert response.status == 400 and
-             response.body ==
-               "Find header parameter `items` with error: Type mismatch. Expected Integer but got String."
+             response.body == "Failed to convert parameter"
   end
 
   test "missing required header parameter", %{url: url} do
@@ -726,7 +724,8 @@ defmodule Oasis.IntegrationTest do
              |> Finch.request(TestFinch)
 
     assert response.status == 400 and
-             response.body == "Find body parameter `body_request` with error: Type mismatch. Expected Integer but got String."
+             response.body ==
+               "Find body parameter `body_request` with error: Expected the value to be <= 10"
   end
 
   test "verify hmac auth host only", %{url: url} do

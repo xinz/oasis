@@ -64,6 +64,23 @@ defmodule Oasis.Spec.DocumentTest do
 
       assert {:error, {"json_parse_error", ^path}} = Document.load_external(path)
     end
+
+    test "loads percent-encoded file URIs and preserves their resource identity" do
+      path = tmp_file("oasis external file", ".json", ~s({"type":"integer"}))
+      on_exit(fn -> File.rm(path) end)
+      uri = %URI{scheme: "file", path: path} |> URI.to_string()
+
+      assert {:ok, %{document: %{"type" => "integer"}, base_uri: ^uri}} =
+               Document.load_external(uri)
+    end
+
+    test "rejects non-schema external document roots" do
+      path = tmp_file("oasis_external_list", ".json", "[1,2,3]")
+      on_exit(fn -> File.rm(path) end)
+
+      assert {:error, {"invalid_document", ^path, [1, 2, 3]}} =
+               Document.load_external(path)
+    end
   end
 
   defp tmp_file(prefix, ext, content) do

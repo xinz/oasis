@@ -8,7 +8,7 @@ defmodule Mix.Oasis.Router do
   the OpenAPI source location for every schema fragment Oasis extracted from the
   operation, in the shape of the user's original OpenAPI document (not Oasis's
   internal post-processed form). It is intended for tooling that consumes
-  `Mix.Oasis.new/2` output and for the mix task's own diagnostics.
+  generation output and for the mix task's own diagnostics.
 
   Generated runtime modules deliberately do **not** embed `:source_meta`. Runtime
   validation errors carry enough route/parameter context via `Plug.Conn` plus
@@ -35,7 +35,10 @@ defmodule Mix.Oasis.Router do
 
   OpenAPI parameters are uniquely identified by `(in, name)` within an
   operation, which is already captured by `parameter_location` and
-  `parameter_name`. No array index is exposed: it would be brittle
+  `parameter_name`. This is a logical operation/input identity: when an OpenAPI
+  Reference Object points to an external target, the metadata still identifies
+  the referencing operation and input and may not identify the exact raw target
+  object in the external document. No array index is exposed: it would be brittle
   (sensitive to reordering) and would need to disambiguate path-item-level
   vs operation-level parameters. Tooling that needs a JSON Pointer into the
   raw document can build one from `path` + `http_verb` (and, if needed,
@@ -162,7 +165,12 @@ defmodule Mix.Oasis.Router do
   end
 
   defp new(apps, url, http_verb, operation, opts) do
-    opts = Keyword.put(opts, :operation_pointer_path, ["paths", url, http_verb])
+    source_url = source_url(opts, url)
+
+    opts =
+      opts
+      |> Keyword.put(:formatted_url, url)
+      |> Keyword.put(:operation_pointer_path, ["paths", source_url, http_verb])
 
     router =
       Map.merge(
@@ -267,7 +275,7 @@ defmodule Mix.Oasis.Router do
          {schemas_acc, meta_acc},
          opts
        ) do
-    entry = entry(opts, ["parameters", location, index, "schema"])
+    entry = parameter_entry(opts, location, name, index, ["schema"])
 
     parameter_value =
       put_required_if_exists(parameter, %{
@@ -280,6 +288,41 @@ defmodule Mix.Oasis.Router do
       Map.put(schemas_acc, name, parameter_value),
       Map.put(meta_acc, name, source_meta)
     }
+  end
+
+  defp map_parameter(
+         %{"name" => name, "content" => content} = parameter,
+         location,
+         index,
+         {schemas_acc, meta_acc},
+         opts
+       )
+       when is_map(content) do
+    prepared_content =
+      Enum.reduce(content, %{}, fn {content_type, media}, acc ->
+        case media do
+          %{"schema" => schema} ->
+            entry =
+              parameter_entry(opts, location, name, index, ["content", content_type, "schema"])
+            prepared_schema = Mix.Oasis.prepare_json_schema!(schema, schema_opts(opts, entry))
+            Map.put(acc, content_type, Map.put(media, "schema", prepared_schema))
+
+          _other ->
+            acc
+        end
+      end)
+
+    if prepared_content == %{} do
+      {schemas_acc, meta_acc}
+    else
+      parameter_value = put_required_if_exists(parameter, %{"content" => prepared_content})
+      source_meta = parameter_source_meta(opts, location, name)
+
+      {
+        Map.put(schemas_acc, name, parameter_value),
+        Map.put(meta_acc, name, source_meta)
+      }
+    end
   end
 
   defp map_parameter(_, _location, _index, acc, _opts), do: acc
@@ -352,15 +395,21 @@ defmodule Mix.Oasis.Router do
     |> pointer_from_path()
   end
 
-  defp pointer_from_path(path) do
-    "#" <> Enum.map_join(path, "", fn segment -> "/" <> encode_pointer_segment(segment) end)
+  defp parameter_entry(opts, location, name, index, relative_path) do
+    ["paths", _source_url, http_verb] = operation_path = Keyword.fetch!(opts, :operation_pointer_path)
+    formatted_url = Keyword.fetch!(opts, :formatted_url)
+    source_key = {:parameter, formatted_url, http_verb, location, name}
+
+    source_path =
+      opts
+      |> Keyword.get(:schema_sources, %{})
+      |> Map.get(source_key, operation_path ++ ["parameters", location, index])
+
+    pointer_from_path(source_path ++ relative_path)
   end
 
-  defp encode_pointer_segment(segment) do
-    segment
-    |> to_string()
-    |> String.replace("~", "~0")
-    |> String.replace("/", "~1")
+  defp pointer_from_path(path) do
+    ExJSONPointer.encode_path(path, format: "uri_fragment")
   end
 
   defp merge_security_to_operation({router, operation}, opts) do

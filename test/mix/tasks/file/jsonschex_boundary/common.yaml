@@ -1,8 +1,19 @@
 components:
+  securitySchemes:
+    UserBearer:
+      type: http
+      scheme: bearer
   parameters:
     UserId:
       name: id
       in: path
       required: true
       schema:
-        type: integer
+        $ref: '#/components/schemas/UserId'
+        allOf:
+          - $ref: '#/components/schemas/MinimumUserId'
+  schemas:
+    UserId:
+      type: integer
+    MinimumUserId:
+      minimum: 100

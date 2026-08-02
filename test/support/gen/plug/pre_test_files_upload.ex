@@ -1,21 +1,32 @@
 defmodule Oasis.Gen.Plug.PreTestFilesUpload do
-    use Oasis.Controller
+  # NOTICE: Please DO NOT write any business code in this module, since it will always be overridden when
+  # run `mix oas.gen.plug` task command with the OpenAPI Specification file.
+  use Oasis.Controller
   use Plug.ErrorHandler
-  plug(Plug.Parsers, parsers: [:multipart], pass: ["*/*"])
+  require JSONSchex.Schema
+
+  plug(Plug.Parsers,
+    parsers: [:multipart],
+    pass: ["*/*"],
+    body_reader: {Oasis.CacheRawBodyReader, :read_body, []}
+  )
 
   plug(Oasis.Plug.RequestValidator,
     body_schema: %{
       "content" => %{
         "multipart/form-data" => %{
           "schema" =>
-            Oasis.Test.JSONSchema.compile!(
+            JSONSchex.Schema.compile!(
               %{
                 "properties" => %{
                   "file" => %{"items" => %{}, "type" => "array"},
-                  "logo" => %{"type" => "string"},
-                  "id" => %{"type" => "integer"}
+                  "logo" => %{"format" => "binary", "type" => "string"},
+                  "id" => %{"maximum" => 10, "type" => "integer"}
                 }
-              })
+              },
+              format_assertion: true,
+              content_assertion: false
+            )
         }
       }
     }

@@ -1,13 +1,20 @@
 defmodule Oasis.Gen.Plug.PreTestCookie do
-    use Oasis.Controller
+  # NOTICE: Please DO NOT write any business code in this module, since it will always be overridden when
+  # run `mix oas.gen.plug` task command with the OpenAPI Specification file.
+  use Oasis.Controller
   use Plug.ErrorHandler
+  require JSONSchex.Schema
 
   plug(Oasis.Plug.RequestValidator,
     cookie_schema: %{
       "items" => %{
         "required" => true,
         "schema" =>
-          Oasis.Test.JSONSchema.compile!(%{"items" => %{"type" => "number"}, "type" => "array"})
+          JSONSchex.Schema.compile!(
+            %{"items" => %{"type" => "number"}, "type" => "array"},
+            format_assertion: true,
+            content_assertion: false
+          )
       }
     }
   )

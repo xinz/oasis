@@ -25,7 +25,7 @@ Add `oasis` as a dependency to your mix.exs
 ```elixir
 def deps do
   [
-    {:oasis, "~> 0.6"}
+    {:oasis, "~> 0.7"}
   ]
 end
 ```
@@ -185,18 +185,15 @@ Library callers can pass a custom JSONSchex-compatible `:loader` through Oasis g
 
 #### Bundled schema shape
 
-The schemas embedded in generated `pre_*.ex` modules are **standalone bundles** — they are *not* a verbatim copy of the original OpenAPI fragment. JSONSchex collects everything the fragment transitively `$ref`s, then Oasis compacts the result to JSON-Schema-only top-level keys. In practice this means a generated `body_schema` may legitimately include:
+The schemas embedded in generated `pre_*.ex` modules are the standalone bundles returned by `JSONSchex.bundle_fragment/2`. Oasis preserves those bundles verbatim rather than curating JSON Schema keywords or stripping OpenAPI keys.
 
-* `"$defs"` — inlined definitions JSONSchex pulled in while bundling.
-* `"components"` — retained unconditionally so component-level Schema Object `$ref`s stay resolvable inside the bundled graph.
-
-Top-level OpenAPI document keys (`openapi`, `info`, `servers`, `tags`, `webhooks`, `externalDocs`, `paths`) are stripped, so the embedded value is a clean JSON Schema document, not an OpenAPI document.
+A bundle may therefore contain `$defs`, `components`, custom vocabulary keywords, OpenAPI annotations, or other containing-document context. JSONSchex guarantees that reachable references can compile without the original source loader; it does not guarantee a byte-minimal output shape. Applications should depend on schema behavior rather than the presence or absence of incidental top-level keys.
 
 #### Generation-time vs. runtime source metadata
 
 OpenAPI source locations (path, HTTP verb, parameter location/name, content type) are exposed **at generation time** on the public `:source_meta` field of `%Mix.Oasis.Router{}`. They are *not* embedded into generated runtime modules — the runtime stays small and Plug-native.
 
-For runtime error handling, `Oasis.BadRequestError` carries `:use_in` and `:param_name`, and its `:error` field will be an `%Oasis.BadRequestError.JSONSchemaValidationFailed{}` whenever the failure originated from JSON Schema validation. That struct exposes the underlying `%JSONSchex.Types.Error{}` plus a RFC 6901 JSON Pointer (`:path`) into the offending payload:
+For runtime error handling, `Oasis.BadRequestError` carries `:use_in` and `:param_name`, and its `:error` field will be an `%Oasis.BadRequestError.JSONSchemaValidationFailed{}` whenever the failure originated from JSON Schema validation. That struct exposes the underlying `%JSONSchex.Types.Error{}` plus a URI-fragment JSON Pointer (`:path`) into the offending payload:
 
 ```elixir
 def handle_errors(conn, %{reason: %Oasis.BadRequestError{

@@ -54,27 +54,24 @@ defmodule Oasis.Validator do
   end
 
   defp do_parse_and_validate!(
-         %JSONSchex.Types.Schema{raw: raw_schema} = json_schema_root,
-         "body",
+         %JSONSchex.Types.Schema{} = json_schema_root,
+         use_in,
          param_name,
-         %{"_json" => value} = wrapped_value
+         value,
+         opts \\ []
        ) do
-    if unwrap_json_body?(raw_schema, value) do
-      # Since `Plug.Parsers.JSON` parses a non-map body content into a "_json" key to allow proper param merging, here
-      # will unwrap the "_json" key and format the input body params as a matched type to the defined OpenAPI specification.
-      do_parse_and_validate!(json_schema_root, "body", param_name, value)
-    else
-      do_parse_and_validate_value!(json_schema_root, "body", param_name, wrapped_value)
-    end
+    do_parse_and_validate_value!(json_schema_root, use_in, param_name, value, opts)
   end
 
-  defp do_parse_and_validate!(%JSONSchex.Types.Schema{} = json_schema_root, use_in, param_name, value) do
-    do_parse_and_validate_value!(json_schema_root, use_in, param_name, value)
-  end
-
-  defp do_parse_and_validate_value!(%JSONSchex.Types.Schema{raw: schema} = json_schema_root, use_in, param_name, value) do
+  defp do_parse_and_validate_value!(
+         %JSONSchex.Types.Schema{} = json_schema_root,
+         use_in,
+         param_name,
+         value,
+         opts
+       ) do
     try do
-      Oasis.Parser.parse(schema, value)
+      Oasis.Parser.parse(json_schema_root, value)
     rescue
       ArgumentError ->
         raise BadRequestError,
@@ -89,7 +86,7 @@ defmodule Oasis.Validator do
         result =
           json_schema_root
           |> json_schema_validate(parsed)
-          |> recheck_after_validate()
+          |> recheck_after_validate(json_schema_root, opts)
 
         case result do
           {:ok, ^parsed} ->
@@ -105,30 +102,19 @@ defmodule Oasis.Validator do
     end
   end
 
-  defp unwrap_json_body?(%{"type" => "string"}, value), do: is_bitstring(value)
-  defp unwrap_json_body?(%{"type" => "number"}, value), do: is_number(value)
-  defp unwrap_json_body?(%{"type" => "integer"}, value), do: is_integer(value)
-  defp unwrap_json_body?(%{"type" => "array"}, value), do: is_list(value)
-  defp unwrap_json_body?(%{"type" => "boolean"}, value), do: is_boolean(value)
-  defp unwrap_json_body?(_raw_schema, _value), do: false
 
-  defp json_schema_validate(%JSONSchex.Types.Schema{raw: raw_schema} = json_schema_root, parsed) do
-    result =
-      case JSONSchex.validate(json_schema_root, parsed) do
-        :ok -> strict_format_validate(raw_schema, parsed)
-        {:error, _errors} = error -> error
-      end
 
-    {result, parsed}
+  defp json_schema_validate(%JSONSchex.Types.Schema{} = json_schema_root, parsed) do
+    {JSONSchex.validate(json_schema_root, parsed), parsed}
   end
 
-  defp recheck_after_validate({:ok, parsed}), do: {:ok, parsed}
+  defp recheck_after_validate({:ok, parsed}, _schema, _opts), do: {:ok, parsed}
 
-  defp recheck_after_validate({{:error, errors}, parsed}) do
+  defp recheck_after_validate({{:error, errors}, parsed}, schema, opts) do
     errors =
       errors
-      |> Enum.filter(&error_to_attention?(&1, parsed))
-      |> Enum.sort_by(fn error -> {List.wrap(error.path), error_priority(error.rule)} end)
+      |> Enum.filter(&error_to_attention?(&1, parsed, schema, opts))
+      |> Enum.sort_by(fn error -> {root_first_path(error), error_priority(error.rule)} end)
 
     case errors do
       [] ->
@@ -139,41 +125,225 @@ defmodule Oasis.Validator do
     end
   end
 
-  defp error_to_attention?(%JSONSchex.Types.Error{rule: :type, path: path, context: context}, parsed) do
-    case value_in_path(List.wrap(path), parsed) do
+  # JSONSchex stores validation paths leaf-first. Keep its error untouched for
+  # callers and derive a root-first path only where Oasis needs to traverse or
+  # render the request value.
+  defp root_first_path(%JSONSchex.Types.Error{path: path}) do
+    path
+    |> List.wrap()
+    |> Enum.reverse()
+  end
+
+  defp error_to_attention?(%JSONSchex.Types.Error{} = error, parsed, schema, opts) do
+    path = root_first_path(error)
+
+    case value_in_path(path, parsed) do
       %Plug.Upload{} ->
-        # ignore `Plug.Upload` failed in json schema validation
-        Map.get(context || %{}, :contrast) != "string"
+        not (opts[:multipart_uploads?] == true and upload_schema?(schema, path))
 
       _ ->
         true
     end
   end
 
-  defp error_to_attention?(_error, _parsed), do: true
+  defp upload_schema?(%JSONSchex.Types.Schema{} = root, path) do
+    root
+    |> schemas_at_path(path, root)
+    |> Enum.any?(&(upload_compatibility(&1, root, []) == :compatible))
+  end
+
+  defp schemas_at_path(schema, [], _root), do: [schema]
+
+  defp schemas_at_path(schema, [segment | rest], root) do
+    schema
+    |> expand_schema(root, [])
+    |> Enum.flat_map(&child_schemas(&1, segment))
+    |> Enum.flat_map(&schemas_at_path(&1, rest, root))
+  end
+
+  defp expand_schema(%JSONSchex.Types.Schema{} = schema, root, visited_refs) do
+    expanded =
+      Enum.flat_map(schema.rules || [], fn
+        %JSONSchex.Types.Rule{name: :ref, params: %{resolved_uri: uri}} ->
+          if uri in visited_refs do
+            []
+          else
+            case Map.get(root.defs || %{}, uri) do
+              %JSONSchex.Types.Schema{} = target ->
+                expand_schema(target, root, [uri | visited_refs])
+
+              _missing ->
+                []
+            end
+          end
+
+        %JSONSchex.Types.Rule{name: name, params: schemas}
+        when name in [:allOf, :anyOf, :oneOf] ->
+          Enum.flat_map(schemas, &expand_schema(&1, root, visited_refs))
+
+        %JSONSchex.Types.Rule{name: :if, params: branches} ->
+          branches
+          |> Map.values()
+          |> Enum.reject(&is_nil/1)
+          |> Enum.flat_map(&expand_schema(&1, root, visited_refs))
+
+        _rule ->
+          []
+      end)
+
+    [schema | expanded]
+  end
+
+  defp child_schemas(%JSONSchex.Types.Schema{rules: rules}, segment) when is_binary(segment) do
+    rules = rules || []
+
+    properties =
+      for %JSONSchex.Types.Rule{name: :properties, params: properties} <- rules,
+          {^segment, schema} <- properties,
+          do: schema
+
+    patterns =
+      for %JSONSchex.Types.Rule{name: :patternProperties, params: patterns} <- rules,
+          {regex, schema} <- patterns,
+          Regex.match?(regex, segment),
+          do: schema
+
+    additional =
+      for %JSONSchex.Types.Rule{
+            name: :additionalProperties,
+            params: %{schema: schema, known_props: known, patterns: additional_patterns}
+          } <- rules,
+          not MapSet.member?(known, segment),
+          not Enum.any?(additional_patterns, &Regex.match?(&1, segment)),
+          do: schema
+
+    properties ++ patterns ++ additional
+  end
+
+  defp child_schemas(%JSONSchex.Types.Schema{rules: rules}, segment) when is_integer(segment) do
+    rules = rules || []
+
+    prefix =
+      for %JSONSchex.Types.Rule{name: :prefixItems, params: schemas} <- rules,
+          schema = Enum.at(schemas, segment),
+          schema != nil,
+          do: schema
+
+    items =
+      for %JSONSchex.Types.Rule{
+            name: :items,
+            params: %{start_index: start_index, schema: schema}
+          } <- rules,
+          segment >= start_index,
+          do: schema
+
+    prefix ++ items
+  end
+
+  defp child_schemas(_schema, _segment), do: []
+
+  defp upload_compatibility(%JSONSchex.Types.Schema{rules: rules}, root, visited_refs) do
+    rules = rules || []
+    local = local_upload_compatibility(rules)
+
+    refs =
+      for %JSONSchex.Types.Rule{name: :ref, params: %{resolved_uri: uri}} <- rules do
+        if uri in visited_refs do
+          :neutral
+        else
+          case Map.get(root.defs || %{}, uri) do
+            %JSONSchex.Types.Schema{} = target ->
+              upload_compatibility(target, root, [uri | visited_refs])
+
+            _missing ->
+              :incompatible
+          end
+        end
+      end
+
+    all_of =
+      for %JSONSchex.Types.Rule{name: :allOf, params: schemas} <- rules,
+          schema <- schemas,
+          do: upload_compatibility(schema, root, visited_refs)
+
+    base = combine_upload_all([local | refs ++ all_of])
+
+    applicators =
+      Enum.flat_map(rules, fn
+        %JSONSchex.Types.Rule{name: :anyOf, params: schemas} ->
+          statuses = Enum.map(schemas, &upload_compatibility(&1, root, visited_refs))
+          [if(:compatible in statuses, do: :compatible, else: :incompatible)]
+
+        %JSONSchex.Types.Rule{name: :oneOf, params: schemas} ->
+          statuses = Enum.map(schemas, &upload_compatibility(&1, root, visited_refs))
+          valid = Enum.reject(statuses, &(&1 == :incompatible))
+          [if(valid == [:compatible], do: :compatible, else: :incompatible)]
+
+        %JSONSchex.Types.Rule{name: name} when name in [:if, :not] ->
+          [:incompatible]
+
+        _rule ->
+          []
+      end)
+
+    combine_upload_all([base | applicators])
+  end
+
+  defp local_upload_compatibility(rules) do
+    type_status =
+      Enum.find_value(rules, :neutral, fn
+        %JSONSchex.Types.Rule{name: :type, params: "string"} -> :neutral
+        %JSONSchex.Types.Rule{name: :type, params: types} when is_list(types) ->
+          if "string" in types, do: :neutral, else: :incompatible
+
+        %JSONSchex.Types.Rule{name: :type} -> :incompatible
+        _rule -> nil
+      end)
+
+    format_status =
+      Enum.find_value(rules, :neutral, fn
+        %JSONSchex.Types.Rule{name: :format, params: format} when format in ["binary", "byte"] ->
+          :compatible
+
+        %JSONSchex.Types.Rule{name: :format} ->
+          :incompatible
+
+        _rule ->
+          nil
+      end)
+
+    unsupported_string_assertion? =
+      Enum.any?(rules, fn
+        %JSONSchex.Types.Rule{name: name}
+        when name in [:const, :enum, :pattern, :minLength, :maxLength, :contentEncoding, :contentMediaType,
+                      :contentSchema] ->
+          true
+
+        _rule ->
+          false
+      end)
+
+    if unsupported_string_assertion? do
+      :incompatible
+    else
+      combine_upload_all([type_status, format_status])
+    end
+  end
+
+  defp combine_upload_all(statuses) do
+    cond do
+      :incompatible in statuses -> :incompatible
+      :compatible in statuses -> :compatible
+      true -> :neutral
+    end
+  end
 
   defp error_priority(:type), do: 0
   defp error_priority(:required), do: 1
   defp error_priority(:dependentRequired), do: 1
   defp error_priority(_rule), do: 9
 
-  defp strict_format_validate(%{"format" => "email"}, value) when is_binary(value) do
-    if Regex.match?(~r/^[^@\s]+@[^@\s]+\.[^@\s]+$/, value) do
-      :ok
-    else
-      {:error,
-       [
-         %JSONSchex.Types.Error{
-           path: [],
-           rule: :format,
-           context: %JSONSchex.Types.ErrorContext{contrast: "email", input: value},
-           value: value
-         }
-       ]}
-    end
-  end
 
-  defp strict_format_validate(_schema, _value), do: :ok
 
   defp value_in_path([], parsed), do: parsed
 
@@ -247,7 +417,11 @@ defmodule Oasis.Validator do
     JSONSchex.format_error(error)
   end
 
-  defp format_type([type | _]), do: format_type(type)
+  defp format_type(types) when is_list(types) do
+    types
+    |> Enum.map(&format_type/1)
+    |> Enum.join(" or ")
+  end
   defp format_type("integer"), do: "Integer"
   defp format_type("number"), do: "Number"
   defp format_type("string"), do: "String"
@@ -257,20 +431,10 @@ defmodule Oasis.Validator do
   defp format_type("null"), do: "Null"
   defp format_type(type), do: type |> to_string() |> String.capitalize()
 
-  defp path_pointer(%JSONSchex.Types.Error{path: path}) do
-    case List.wrap(path) do
-      [] -> "#"
-      segments -> "#/" <> Enum.map_join(segments, "/", &encode_pointer_segment/1)
-    end
-  end
-
-  defp encode_pointer_segment(segment) when is_integer(segment), do: Integer.to_string(segment)
-
-  defp encode_pointer_segment(segment) do
-    segment
-    |> to_string()
-    |> String.replace("~", "~0")
-    |> String.replace("/", "~1")
+  defp path_pointer(%JSONSchex.Types.Error{} = error) do
+    error
+    |> root_first_path()
+    |> ExJSONPointer.encode_path(format: "uri_fragment")
   end
 
   defp process_media_type(
@@ -310,7 +474,7 @@ defmodule Oasis.Validator do
          name,
          value
        ) do
-    do_parse_and_validate!(json_schema_root, use_in, name, value)
+    do_parse_and_validate!(json_schema_root, use_in, name, value, multipart_uploads?: true)
   end
 
   defp process_media_type(
@@ -320,7 +484,7 @@ defmodule Oasis.Validator do
          name,
          value
        ) do
-    do_parse_and_validate!(json_schema_root, use_in, name, value)
+    do_parse_and_validate!(json_schema_root, use_in, name, value, multipart_uploads?: true)
   end
 
   defp process_media_type(

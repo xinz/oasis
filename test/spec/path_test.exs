@@ -108,8 +108,8 @@ defmodule Oasis.Spec.PathTest do
     assert param_content_schema == %{"$ref" => "#/components/schemas/Content"}
 
     {:ok, bundled} =
-      JSONSchex.bundle_fragment(schema,
-        entry: "#/paths/~1page/get/parameters/query/0/content/application~1json/schema"
+      JSONSchex.bundle_fragment(root.reference_schema,
+        entry: "#/paths/~1page/get/parameters/0/content/application~1json/schema"
       )
 
     assert {:ok, compiled} =
@@ -153,6 +153,32 @@ defmodule Oasis.Spec.PathTest do
 
     assert_raise Oasis.InvalidSpecError, ~r/found both/, fn ->
       Path.build(root)
+    end
+  end
+
+  test "Parameter Object content contains exactly one media type" do
+    for content <- [
+          %{},
+          %{
+            "application/json" => %{"schema" => %{"type" => "object"}},
+            "text/plain" => %{"schema" => %{"type" => "string"}}
+          }
+        ] do
+      root = %{
+        "paths" => %{
+          "/content" => %{
+            "get" => %{
+              "parameters" => [
+                %{"name" => "filter", "in" => "query", "content" => content}
+              ]
+            }
+          }
+        }
+      }
+
+      assert_raise Oasis.InvalidSpecError, ~r/MUST contain exactly one media type entry/, fn ->
+        Path.build(root)
+      end
     end
   end
 

@@ -10,6 +10,77 @@ defmodule Oasis.Plug.RequestValidatorTest do
                "required" => ["name", "tag"],
                "type" => "object"
              })
+  describe "JSON root provenance" do
+    test "unwraps a non-object JSON root whose effective type is behind a ref" do
+      schema =
+        Oasis.Test.JSONSchema.compile!(%{
+          "$defs" => %{"Integer" => %{"type" => "integer"}},
+          "$ref" => "#/$defs/Integer"
+        })
+
+      body_schema = %{
+        "content" => %{"application/json" => %{"schema" => schema}},
+        "required" => true
+      }
+
+      conn =
+        conn(:post, "/", %{"_json" => 123})
+        |> put_req_header("content-type", "application/json")
+        |> assign(:raw_body, ["123"])
+        |> RequestValidator.call(body_schema: body_schema)
+
+      assert conn.body_params == 123
+      assert conn.params == 123
+    end
+
+    test "does not unwrap a form field named _json" do
+      schema =
+        Oasis.Test.JSONSchema.compile!(%{
+          "type" => "object",
+          "required" => ["_json"],
+          "properties" => %{"_json" => %{"type" => "string"}}
+        })
+
+      body_schema = %{
+        "content" => %{
+          "application/x-www-form-urlencoded" => %{"schema" => schema}
+        }
+      }
+
+      conn =
+        conn(:post, "/", %{"_json" => "ok"})
+        |> put_req_header("content-type", "application/x-www-form-urlencoded")
+        |> assign(:raw_body, ["_json=ok"])
+        |> RequestValidator.call(body_schema: body_schema)
+
+      assert conn.body_params == %{"_json" => "ok"}
+    end
+
+    test "preserves a literal JSON object containing _json" do
+      schema =
+        Oasis.Test.JSONSchema.compile!(%{
+          "type" => ["object", "integer"],
+          "required" => ["guard"],
+          "properties" => %{"guard" => %{"const" => "ok"}},
+          "additionalProperties" => false
+        })
+
+      body_schema = %{
+        "content" => %{"application/json" => %{"schema" => schema}},
+        "required" => true
+      }
+
+      conn =
+        conn(:post, "/", %{"_json" => 123})
+        |> put_req_header("content-type", "application/json")
+        |> assign(:raw_body, [~s({"_json":123})])
+
+      assert_raise Oasis.BadRequestError, ~r/Required property guard was not present/, fn ->
+        RequestValidator.call(conn, body_schema: body_schema)
+      end
+    end
+  end
+
   describe("with charset in send request") do
     test "content type application/json" do
       body_schema = %{

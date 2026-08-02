@@ -189,7 +189,7 @@ To keep the API small, the first version should hardcode these defaults:
 1. A selected ref node is replaced by the resolved target value.
 2. Sibling fields next to `$ref` are ignored because the selected node is treated as a Reference Object.
 3. Cycles are errors.
-4. Unselected `$ref` nodes are preserved as-is and are not traversed as refs.
+4. Unselected `$ref` nodes are not resolved. Since JSONSchex `0.9.0`, their siblings and descendants are still traversed, and nested unselected refs may be visibly rebased to preserve their resource origin.
 
 These defaults match the Oasis OpenAPI Reference Object use case and avoid adding options such as `:sibling_policy`, `:on_cycle`, or `:replace` until another concrete use case needs them.
 
@@ -203,7 +203,7 @@ These defaults match the Oasis OpenAPI Reference Object use case and avoid addin
 4. If selected, resolve the ref against the current resource context.
 5. Replace the entire node with the resolved target value.
 6. Continue resolving selected refs inside the resolved target value.
-7. Preserve unselected ref nodes unchanged.
+7. Preserve unselected ref nodes semantically; when they originate in selected external targets, rebase them as needed rather than promising byte-for-byte unchanged text.
 8. Resolve external resources through `:loader`.
 9. Use loader-returned `:base_uri` as the context for nested refs inside external resources.
 10. Return `{:ok, resolved_document}` or `{:error, error}`.
@@ -408,6 +408,6 @@ The first version remains intentionally small:
 - selected refs replace their node
 - selected ref siblings are ignored
 - selected cycles are errors
-- unselected refs are preserved
+- unselected refs remain unresolved but may be visibly rebased to preserve external resource context
 
 This would let Oasis keep OpenAPI policy in Oasis while moving reusable `$ref` mechanics to JSONSchex.

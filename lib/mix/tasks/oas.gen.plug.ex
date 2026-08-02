@@ -45,7 +45,11 @@ defmodule Mix.Tasks.Oas.Gen.Plug do
   end
 
   defp build(opts) do
-    %Oasis.Spec.Document{} = document = Oasis.Spec.read(opts[:file])
+    document =
+      case Oasis.Spec.read(opts[:file]) do
+        %Oasis.Spec.Document{} = document -> document
+        {:error, error} -> raise error
+      end
 
     opts = Keyword.take(opts, [:router, :name_space, :body_reader])
 

@@ -62,6 +62,29 @@ defmodule Oasis.Test.Support.HMAC do
   end
 end
 
+defmodule Oasis.Test.Support.HMAC.TokenVerifyInvalid do
+  @behaviour Oasis.HMACToken
+
+  alias Oasis.HMACToken.Crypto
+  import Oasis.Test.Support.HMAC
+
+  @impl true
+  def crypto_config(_conn, _opts, credential) do
+    c = case_host_only()
+
+    if c.credential == credential do
+      %Crypto{credential: c.credential, secret: c.secret}
+    end
+  end
+
+  @impl true
+  def verify(conn, token, opts) do
+    with {:ok, _} <- Oasis.HMACToken.verify(conn, token, opts) do
+      {:error, "invalid_token"}
+    end
+  end
+end
+
 defmodule Oasis.Test.Support.HMAC.TokenVerifyReturnUnknown do
   @behaviour Oasis.HMACToken
 

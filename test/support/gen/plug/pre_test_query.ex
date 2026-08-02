@@ -1,6 +1,9 @@
 defmodule Oasis.Gen.Plug.PreTestQuery do
-    use Oasis.Controller
+  # NOTICE: Please DO NOT write any business code in this module, since it will always be overridden when
+  # run `mix oas.gen.plug` task command with the OpenAPI Specification file.
+  use Oasis.Controller
   use Plug.ErrorHandler
+  require JSONSchex.Schema
 
   plug(Oasis.Plug.RequestValidator,
     query_schema: %{
@@ -8,7 +11,7 @@ defmodule Oasis.Gen.Plug.PreTestQuery do
         "content" => %{
           "application/json" => %{
             "schema" =>
-              Oasis.Test.JSONSchema.compile!(
+              JSONSchex.Schema.compile!(
                 %{
                   "properties" => %{
                     "name" => %{"type" => "string"},
@@ -16,19 +19,30 @@ defmodule Oasis.Gen.Plug.PreTestQuery do
                   },
                   "required" => ["name", "tag"],
                   "type" => "object"
-                })
+                },
+                format_assertion: true,
+                content_assertion: false
+              )
           }
         },
         "required" => false
       },
       "lang" => %{
         "schema" =>
-          Oasis.Test.JSONSchema.compile!(%{"type" => "integer", "minimum" => 10, "maximum" => 20}),
+          JSONSchex.Schema.compile!(
+            %{"type" => "integer", "minimum" => 10, "maximum" => 20},
+            format_assertion: true,
+            content_assertion: false
+          ),
         "required" => true
       },
       "all" => %{
         "schema" =>
-          Oasis.Test.JSONSchema.compile!(%{"type" => "boolean"}),
+          JSONSchex.Schema.compile!(
+            %{"type" => "boolean"},
+            format_assertion: true,
+            content_assertion: false
+          ),
         "required" => false
       }
     }
