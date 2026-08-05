@@ -51,6 +51,46 @@ defmodule Oasis.Spec.SpecTest do
     assert message =~ "Could not resolve OpenAPI ref"
   end
 
+  test "rejects pre-normalized parameter maps in raw OpenAPI files" do
+    path =
+      Path.join(
+        System.tmp_dir!(),
+        "oasis_normalized_parameters_#{System.unique_integer([:positive])}.yaml"
+      )
+
+    File.write!(path, """
+    paths:
+      /users:
+        get:
+          parameters:
+            query: []
+    """)
+
+    on_exit(fn -> File.rm(path) end)
+
+    assert {:error, %Oasis.InvalidSpecError{message: message}} = Oasis.Spec.read(path)
+    assert message =~ "parameters in path `/users` must be an array"
+  end
+
+  test "returns malformed Operation Objects as invalid-spec tuples" do
+    path =
+      Path.join(
+        System.tmp_dir!(),
+        "oasis_invalid_operation_#{System.unique_integer([:positive])}.yaml"
+      )
+
+    File.write!(path, """
+    paths:
+      /users:
+        get: 42
+    """)
+
+    on_exit(fn -> File.rm(path) end)
+
+    assert {:error, %Oasis.InvalidSpecError{message: message}} = Oasis.Spec.read(path)
+    assert message =~ "Operation Object for `get` in path `/users` must be an object"
+  end
+
   test "input invalid path" do
     {:error, %Oasis.FileNotFoundError{message: message}} = Oasis.Spec.read("unknown.yaml")
     assert message =~ ~s/Failed to open file "unknown.yaml"/

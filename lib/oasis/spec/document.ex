@@ -1,6 +1,11 @@
 defmodule Oasis.Spec.Document do
   @moduledoc """
-  Internal representation of a loaded OpenAPI document.
+  Represents a loaded and prepared OpenAPI document.
+
+  This struct is the successful return value of `Oasis.Spec.read/1`. Consumers
+  should pass the complete value through Oasis generation so its source and
+  reference context remain available; `:schema` may be inspected as the
+  normalized generation view.
 
   `Oasis.Spec.Document` is responsible only for loading and tracking source
   metadata for YAML/JSON OpenAPI documents. It intentionally does not interpret
@@ -25,7 +30,9 @@ defmodule Oasis.Spec.Document do
     :source_path,
     :format,
     url_aliases: %{},
-    schema_sources: %{}
+    schema_sources: %{},
+    normalized?: false,
+    allow_normalized_parameters?: false
   ]
 
   @type pointer_path :: [String.t() | non_neg_integer()]
@@ -36,7 +43,9 @@ defmodule Oasis.Spec.Document do
           source_path: String.t() | nil,
           format: String.t() | nil,
           url_aliases: %{optional(String.t()) => String.t()},
-          schema_sources: %{optional(term()) => pointer_path()}
+          schema_sources: %{optional(term()) => pointer_path()},
+          normalized?: boolean(),
+          allow_normalized_parameters?: boolean()
         }
 
   @doc """
@@ -53,6 +62,10 @@ defmodule Oasis.Spec.Document do
     OpenAPI document used as JSONSchex's reference root.
   - `:schema_sources` - sidecar map from normalized generation inputs to their
     source JSON Pointer token paths in `:reference_schema`.
+  - `:normalized?` - internal marker set during path preparation so repeated
+    preparation is idempotent without inferring state from OpenAPI field shapes.
+  - `:allow_normalized_parameters?` - compatibility flag for the legacy
+    pre-normalized map form accepted by internal generation callers.
   """
   @spec new(map(), keyword()) :: t()
   def new(schema, opts \\ []) when is_map(schema) do
@@ -62,8 +75,19 @@ defmodule Oasis.Spec.Document do
       source_path: opts[:source_path],
       format: opts[:format],
       url_aliases: Keyword.get(opts, :url_aliases, %{}),
-      schema_sources: Keyword.get(opts, :schema_sources, %{})
+      schema_sources: Keyword.get(opts, :schema_sources, %{}),
+      normalized?: Keyword.get(opts, :normalized?, false),
+      allow_normalized_parameters?: Keyword.get(opts, :allow_normalized_parameters?, false)
     }
+  end
+
+  @doc false
+  @spec normalize_base_uri(String.t() | nil) :: String.t() | nil
+  def normalize_base_uri(nil), do: nil
+
+  def normalize_base_uri(path) when is_binary(path) do
+    {_source_path, source_uri} = normalize_local_path(path)
+    source_uri
   end
 
   @doc """

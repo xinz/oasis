@@ -2,6 +2,7 @@ defmodule Oasis.Parser do
   @moduledoc false
 
   alias JSONSchex.Types.{Rule, Schema}
+  alias JSONSchex.URIUtil
 
   def parse(%Schema{} = schema, value) do
     parse_compiled(schema, value, schema, [])
@@ -42,7 +43,7 @@ defmodule Oasis.Parser do
         if uri in visited_refs do
           parsed
         else
-          case Map.get(root.defs || %{}, uri) do
+          case compiled_ref_target(root, uri) do
             %Schema{} = target ->
               parse_compiled(target, parsed, root, [uri | visited_refs])
 
@@ -55,6 +56,36 @@ defmodule Oasis.Parser do
         parsed
     end)
   end
+
+  defp compiled_ref_target(%Schema{} = root, uri) when is_binary(uri) do
+    defs = root.defs || %{}
+
+    case Map.get(defs, uri) do
+      %Schema{} = target ->
+        target
+
+      _missing ->
+        compiled_scoped_ref_target(root, defs, uri)
+    end
+  end
+
+  defp compiled_ref_target(_root, _uri), do: nil
+
+  defp compiled_scoped_ref_target(root, defs, uri) do
+    {base, fragment} = URIUtil.split_fragment(uri)
+
+    with fragment when is_binary(fragment) <- fragment,
+         %Schema{} = resource <- Map.get(defs, base) || root_resource(root, base),
+         %Schema{} = target <- Map.get(resource.defs || %{}, URIUtil.local_ref(fragment)) do
+      target
+    else
+      _missing -> nil
+    end
+  end
+
+  defp root_resource(%Schema{source_id: base} = root, base), do: root
+  defp root_resource(%Schema{} = root, ""), do: root
+  defp root_resource(_root, _base), do: nil
 
   defp parse_local_schema(%{"type" => _type} = raw, value) when is_binary(value) do
     do_parse(raw, value)

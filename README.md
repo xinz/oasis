@@ -25,7 +25,7 @@ Add `oasis` as a dependency to your mix.exs
 ```elixir
 def deps do
   [
-    {:oasis, "~> 0.7"}
+    {:oasis, "~> 0.7.0"}
   ]
 end
 ```
@@ -181,7 +181,7 @@ Oasis distinguishes OpenAPI Reference Objects from JSON Schema `$ref` keywords:
 
 This means external shared schema files and recursive schemas are handled by `jsonschex`, while Oasis keeps OpenAPI-specific traversal and code generation local to Oasis.
 
-Library callers can pass a custom JSONSchex-compatible `:loader` through Oasis generation options when they need non-default file lookup or in-memory resources. The mix task keeps the default local YAML/JSON loader and does not expose custom loader configuration.
+Library callers can use `Mix.Oasis.new/2` to obtain the generation plan and pass a custom JSONSchex-compatible `:loader` when they need non-default file lookup or in-memory resources. The mix task keeps the default local YAML/JSON loader and does not expose custom loader configuration.
 
 #### Bundled schema shape
 

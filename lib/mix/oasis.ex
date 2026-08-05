@@ -1,10 +1,36 @@
 defmodule Mix.Oasis do
-  @moduledoc false
+  @moduledoc """
+  Builds the generation plan consumed by Oasis Mix tasks.
+
+  `new/2` prepares an `Oasis.Spec.Document` or decoded OpenAPI map and returns
+  file descriptors. It does not write files itself. Tooling may inspect each
+  descriptor's binding, including `%Mix.Oasis.Router{source_meta: ...}`, before
+  passing the plan to its own writer.
+  """
 
   alias Oasis.Spec.Document
 
+  @type generation_file ::
+          {:eex | :new_eex, String.t(), String.t(), module(), term()}
+
   @jsonschex_compile_options [format_assertion: true, content_assertion: false]
 
+  @doc """
+  Prepares an OpenAPI document and returns generated-file descriptors.
+
+  Accepted inputs are a prepared `Oasis.Spec.Document` or a decoded OpenAPI map
+  containing a Paths Object. Decoded maps are structurally resolved and
+  normalized before generation.
+
+  Relevant options include `:base_uri`, `:loader`, `:name_space`, and `:router`.
+  Callers passing Oasis's legacy pre-grouped parameter maps must opt in with
+  `normalized_parameters: true`; decoded OpenAPI Parameter Objects use arrays
+  and are validated strictly by default.
+
+  Each returned tuple contains the write policy, target path, template path,
+  target module, and template binding. The Mix task consumes the same plan.
+  """
+  @spec new(Document.t() | map(), keyword()) :: [generation_file()]
   def new(
         %Document{
           schema: %{"paths" => paths} = spec,
@@ -27,13 +53,17 @@ defmodule Mix.Oasis do
   end
 
   def new(%{"paths" => paths} = spec, opts) when is_map(paths) do
-    source_path = opts[:base_uri]
+    source_path = Document.normalize_base_uri(opts[:base_uri])
+    opts = Keyword.put(opts, :base_uri, source_path)
     resolver_opts = Keyword.take(opts, [:base_uri, :loader])
     resolved = Oasis.Spec.OpenAPIRefResolver.resolve(spec, resolver_opts)
 
     document =
       resolved
-      |> Document.new(source_path: source_path)
+      |> Document.new(
+        source_path: source_path,
+        allow_normalized_parameters?: Keyword.get(opts, :normalized_parameters, false)
+      )
       |> Oasis.Spec.Path.build()
 
     new(document, opts)
@@ -273,7 +303,7 @@ defmodule Mix.Oasis do
   end
 
   defp schema_container_to_ast(%JSONSchex.Types.Schema{} = schema) do
-    compile_schema_ast(schema.raw, compile_options_from_compiled(schema))
+    Macro.escape(schema)
   end
 
   defp schema_container_to_ast(%{} = map) do
@@ -308,7 +338,7 @@ defmodule Mix.Oasis do
   defp schema_definition_to_ast(definition) do
     map_to_ast(definition, fn
       %JSONSchex.Types.Schema{} = schema ->
-        compile_schema_ast(schema.raw, compile_options_from_compiled(schema))
+        Macro.escape(schema)
 
       schema when is_map(schema) or is_boolean(schema) ->
         compile_schema_ast(schema, schema_compile_options())
@@ -363,20 +393,6 @@ defmodule Mix.Oasis do
         unquote(Macro.escape(opts))
       )
     end
-  end
-
-  defp compile_options_from_compiled(%JSONSchex.Types.Schema{} = schema) do
-    [
-      format_assertion: schema.format_assertion,
-      content_assertion: schema.content_assertion
-    ]
-    |> maybe_put_loader(schema.loader)
-  end
-
-  defp maybe_put_loader(opts, nil), do: opts
-
-  defp maybe_put_loader(opts, loader) do
-    Keyword.put(opts, :loader, loader)
   end
 
   defp compile_prepared_json_schema!(schema, opts) when is_map(schema) or is_boolean(schema) do

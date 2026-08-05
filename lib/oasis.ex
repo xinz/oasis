@@ -71,12 +71,26 @@ defmodule Oasis do
   end
 
   defmodule CacheRawBodyReader do
-    @moduledoc false
+    @moduledoc """
+    A `Plug.Parsers` body reader that preserves the raw request body.
+
+    Oasis uses the cached bytes to distinguish Plug's `_json` wrapper for a
+    primitive JSON root from a literal JSON object whose property is named
+    `_json`. Generated routers configure this reader automatically. Handwritten
+    pipelines that validate primitive JSON request bodies should pass
+    `{Oasis.CacheRawBodyReader, :read_body, []}` as `Plug.Parsers`'s
+    `:body_reader` option.
+    """
 
     def read_body(conn, opts) do
-      {:ok, body, conn} = Plug.Conn.read_body(conn, opts)
-      conn = update_in(conn.assigns[:raw_body], &[body | &1 || []])
-      {:ok, body, conn}
+      case Plug.Conn.read_body(conn, opts) do
+        {status, body, conn} when status in [:ok, :more] ->
+          conn = update_in(conn.assigns[:raw_body], &[body | &1 || []])
+          {status, body, conn}
+
+        {:error, _reason} = error ->
+          error
+      end
     end
   end
 

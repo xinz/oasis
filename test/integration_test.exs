@@ -507,7 +507,7 @@ defmodule Oasis.IntegrationTest do
     assert {:ok, response} = Finch.build(:post, "#{url}/test_post_json", headers, body) |> Finch.request(TestFinch)
     body = Jason.decode!(response.body)
     assert response.status == 200 and
-             body["body_params"] == [%{"id" => 1, "name" => "hello"}] and
+             body["body_params"] == %{"_json" => [%{"id" => 1, "name" => "hello"}]} and
              body["body_params"] == body["params"]
 
     headers = [{"content-type", "application/vnd.api-v1+json"}]
@@ -516,7 +516,7 @@ defmodule Oasis.IntegrationTest do
     assert {:ok, response} = Finch.build(:post, "#{url}/test_post_json", headers, body) |> Finch.request(TestFinch)
     body = Jason.decode!(response.body)
     assert response.status == 200 and
-             body["body_params"] == 1 and
+             body["body_params"] == %{"_json" => 1} and
              body["body_params"] == body["params"]
 
     headers = [{"content-type", "application/vnd.api-v2+json"}]
@@ -525,7 +525,7 @@ defmodule Oasis.IntegrationTest do
     assert {:ok, response} = Finch.build(:post, "#{url}/test_post_json", headers, body) |> Finch.request(TestFinch)
     body = Jason.decode!(response.body)
     assert response.status == 200 and
-             body["body_params"] == 1.5 and
+             body["body_params"] == %{"_json" => 1.5} and
              body["body_params"] == body["params"]
   end
 

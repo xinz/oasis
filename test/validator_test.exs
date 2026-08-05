@@ -567,6 +567,24 @@ defmodule Oasis.ValidatorTest do
     end
   end
 
+  test "distinguishes a present null body from an absent optional value" do
+    false_schema = %{"schema" => Oasis.Test.JSONSchema.compile!(false)}
+
+    # The four-argument parameter API preserves nil-as-absent compatibility.
+    assert Validator.parse_and_validate!(false_schema, "query", "value", nil) == nil
+
+    assert_raise Oasis.BadRequestError, fn ->
+      Validator.parse_and_validate!(false_schema, "body", "requestBody", nil, present?: true)
+    end
+
+    null_schema = %{
+      "required" => true,
+      "schema" => Oasis.Test.JSONSchema.compile!(%{"type" => "null"})
+    }
+
+    assert Validator.parse_and_validate!(null_schema, "body", "requestBody", nil, present?: true) == nil
+  end
+
   test "type array items" do
     param = %{
       "required" => true,
@@ -1190,9 +1208,12 @@ defmodule Oasis.ValidatorTest do
     upload = %Plug.Upload{content_type: "image/png", filename: "test.png", path: "/var/tmp/path"}
 
     for schema <- [
+          %{},
           %{"type" => "string"},
           %{"type" => ["string", "null"], "format" => "email"},
-          %{"type" => ["string", "null"], "minLength" => 1000}
+          %{"type" => ["string", "null"], "minLength" => 1000},
+          %{"type" => "string", "format" => "binary", "minLength" => 1},
+          %{"type" => "string", "format" => "binary", "contentEncoding" => "base64"}
         ] do
       param = %{
         "content" => %{
@@ -1219,6 +1240,91 @@ defmodule Oasis.ValidatorTest do
 
     assert_raise Oasis.BadRequestError, ~r/Type mismatch/, fn ->
       Validator.parse_and_validate!(%{"schema" => binary_schema}, "query", "file", %{"file" => upload})
+    end
+
+    permissive_schema =
+      Oasis.Test.JSONSchema.compile!(%{
+        "type" => "object",
+        "properties" => %{"file" => %{}}
+      })
+
+    assert_raise Oasis.BadRequestError, ~r/Type mismatch/, fn ->
+      Validator.parse_and_validate!(%{"schema" => permissive_schema}, "query", "file", %{"file" => upload})
+    end
+  end
+
+  test "multipart uploads accept byte format and static binary refs" do
+    upload = %Plug.Upload{content_type: "image/png", filename: "test.png", path: "/var/tmp/path"}
+
+    for file_schema <- [
+          %{"type" => "string", "format" => "byte"},
+          %{"$ref" => "#/$defs/Binary"}
+        ] do
+      schema =
+        Oasis.Test.JSONSchema.compile!(%{
+          "$defs" => %{"Binary" => %{"type" => "string", "format" => "binary"}},
+          "type" => "object",
+          "properties" => %{"file" => file_schema}
+        })
+
+      param = %{"content" => %{"multipart/form-data" => %{"schema" => schema}}}
+      input = %{"file" => upload}
+      assert Validator.parse_and_validate!(param, "body", "requestBody", input) == input
+    end
+  end
+
+  test "non-multipart upload rejection traverses lists and reports the exact pointer" do
+    upload = %Plug.Upload{content_type: "image/png", filename: "test.png", path: "/var/tmp/path"}
+    schema = Oasis.Test.JSONSchema.compile!(%{})
+    input = %{"items" => [%{"file" => upload}]}
+
+    try do
+      Validator.parse_and_validate!(%{"schema" => schema}, "body", "requestBody", input)
+      flunk("expected non-multipart upload rejection")
+    rescue
+      error in Oasis.BadRequestError ->
+        assert %Oasis.BadRequestError.JSONSchemaValidationFailed{path: "#/items/0/file"} = error.error
+        assert error.message =~ "Type mismatch"
+    end
+  end
+
+  test "multipart dependent schemas apply only when their trigger is present" do
+    upload = %Plug.Upload{content_type: "image/png", filename: "test.png", path: "/var/tmp/path"}
+
+    schema =
+      Oasis.Test.JSONSchema.compile!(%{
+        "type" => "object",
+        "properties" => %{
+          "trigger" => %{"type" => "boolean"},
+          "file" => %{"type" => "string", "format" => "binary"}
+        },
+        "dependentSchemas" => %{
+          "trigger" => %{"properties" => %{"file" => %{"type" => "integer"}}}
+        }
+      })
+
+    param = %{"content" => %{"multipart/form-data" => %{"schema" => schema}}}
+    assert Validator.parse_and_validate!(param, "body", "requestBody", %{"file" => upload}) == %{"file" => upload}
+
+    assert_raise Oasis.BadRequestError, ~r/Type mismatch/, fn ->
+      Validator.parse_and_validate!(param, "body", "requestBody", %{"trigger" => true, "file" => upload})
+    end
+  end
+
+  test "multipart upload authorization fails closed for ambiguous oneOf" do
+    upload = %Plug.Upload{content_type: "image/png", filename: "test.png", path: "/var/tmp/path"}
+    binary = %{"type" => "string", "format" => "binary"}
+
+    schema =
+      Oasis.Test.JSONSchema.compile!(%{
+        "type" => "object",
+        "properties" => %{"file" => %{"oneOf" => [binary, binary]}}
+      })
+
+    param = %{"content" => %{"multipart/form-data" => %{"schema" => schema}}}
+
+    assert_raise Oasis.BadRequestError, ~r/Type mismatch/, fn ->
+      Validator.parse_and_validate!(param, "body", "requestBody", %{"file" => upload})
     end
   end
 
@@ -1255,6 +1361,230 @@ defmodule Oasis.ValidatorTest do
       })
 
     param = %{"content" => %{"multipart/form-data" => %{"schema" => all_of}}}
+
+    assert_raise Oasis.BadRequestError, ~r/Type mismatch/, fn ->
+      Validator.parse_and_validate!(param, "body", "requestBody", %{"file" => upload})
+    end
+  end
+
+  test "multipart upload authorization follows oneOf and dynamic object locations" do
+    upload = %Plug.Upload{content_type: "image/png", filename: "test.png", path: "/var/tmp/path"}
+    binary = %{"type" => "string", "format" => "binary"}
+
+    schemas_and_inputs = [
+      {
+        %{
+          "type" => "object",
+          "properties" => %{
+            "file" => %{"oneOf" => [binary, %{"type" => "integer"}]}
+          }
+        },
+        %{"file" => upload}
+      },
+      {
+        %{"type" => "object", "patternProperties" => %{"^file$" => binary}},
+        %{"file" => upload}
+      },
+      {
+        %{"type" => "object", "additionalProperties" => binary},
+        %{"file" => upload}
+      },
+      {
+        %{
+          "type" => "object",
+          "dependentSchemas" => %{
+            "trigger" => %{"properties" => %{"file" => binary}}
+          }
+        },
+        %{"trigger" => true, "file" => upload}
+      },
+      {
+        %{
+          "type" => "object",
+          "dependencies" => %{
+            "trigger" => %{"properties" => %{"file" => binary}}
+          }
+        },
+        %{"trigger" => true, "file" => upload}
+      },
+      {
+        %{"type" => "object", "unevaluatedProperties" => binary},
+        %{"file" => upload}
+      },
+      {
+        %{
+          "type" => "array",
+          "prefixItems" => [%{"type" => "string"}],
+          "unevaluatedItems" => binary
+        },
+        ["known", upload]
+      }
+    ]
+
+    for {raw_schema, input} <- schemas_and_inputs do
+      schema = Oasis.Test.JSONSchema.compile!(raw_schema)
+      param = %{"content" => %{"multipart/form-data" => %{"schema" => schema}}}
+
+      assert Validator.parse_and_validate!(param, "body", "requestBody", input) == input
+    end
+  end
+
+  test "multipart upload authorization rejects content-sensitive array predicates" do
+    upload = %Plug.Upload{content_type: "image/png", filename: "test.png", path: "/var/tmp/path"}
+
+    schema =
+      Oasis.Test.JSONSchema.compile!(%{
+        "type" => "array",
+        "if" => %{"prefixItems" => [%{"maxLength" => 1}]},
+        "then" => %{
+          "prefixItems" => [%{"type" => "string", "format" => "binary"}]
+        },
+        "else" => true
+      })
+
+    param = %{"content" => %{"multipart/form-data" => %{"schema" => schema}}}
+
+    assert_raise Oasis.BadRequestError, fn ->
+      Validator.parse_and_validate!(param, "body", "requestBody", [upload])
+    end
+  end
+
+  test "multipart upload authorization respects overlapping object schemas" do
+    upload = %Plug.Upload{content_type: "image/png", filename: "test.png", path: "/var/tmp/path"}
+
+    schema =
+      Oasis.Test.JSONSchema.compile!(%{
+        "type" => "object",
+        "properties" => %{
+          "file" => %{"type" => "string", "format" => "binary"}
+        },
+        "patternProperties" => %{
+          "^file$" => %{"type" => "integer"}
+        }
+      })
+
+    param = %{"content" => %{"multipart/form-data" => %{"schema" => schema}}}
+
+    assert_raise Oasis.BadRequestError, ~r/Type mismatch/, fn ->
+      Validator.parse_and_validate!(param, "body", "requestBody", %{"file" => upload})
+    end
+  end
+
+  test "multipart upload authorization follows only the active conditional branch" do
+    upload = %Plug.Upload{content_type: "image/png", filename: "test.png", path: "/var/tmp/path"}
+
+    schema =
+      Oasis.Test.JSONSchema.compile!(%{
+        "type" => "object",
+        "properties" => %{"kind" => %{"type" => "string"}},
+        "if" => %{
+          "properties" => %{"kind" => %{"const" => "binary"}},
+          "required" => ["kind"]
+        },
+        "then" => %{
+          "properties" => %{
+            "payload" => %{"type" => "string", "format" => "binary"}
+          }
+        },
+        "else" => %{
+          "properties" => %{"payload" => %{"type" => "string"}}
+        }
+      })
+
+    param = %{"content" => %{"multipart/form-data" => %{"schema" => schema}}}
+
+    assert Validator.parse_and_validate!(
+             param,
+             "body",
+             "requestBody",
+             %{"kind" => "binary", "payload" => upload}
+           ) == %{"kind" => "binary", "payload" => upload}
+
+    assert_raise Oasis.BadRequestError, ~r/Type mismatch/, fn ->
+      Validator.parse_and_validate!(
+        param,
+        "body",
+        "requestBody",
+        %{"kind" => "plain", "payload" => upload}
+      )
+    end
+  end
+
+  test "multipart upload authorization resolves refs in their scoped resource" do
+    upload = %Plug.Upload{content_type: "image/png", filename: "test.png", path: "/var/tmp/path"}
+
+    schema =
+      Oasis.Test.JSONSchema.compile!(%{
+        "$id" => "https://example.test/root.json",
+        "$defs" => %{
+          "value" => %{"type" => "string", "format" => "binary"},
+          "scoped" => %{
+            "$id" => "scope/",
+            "$defs" => %{"value" => %{"type" => "string"}},
+            "type" => "object",
+            "properties" => %{"file" => %{"$ref" => "#/$defs/value"}}
+          }
+        },
+        "$ref" => "scope/"
+      })
+
+    param = %{"content" => %{"multipart/form-data" => %{"schema" => schema}}}
+
+    assert_raise Oasis.BadRequestError, ~r/Type mismatch/, fn ->
+      Validator.parse_and_validate!(param, "body", "requestBody", %{"file" => upload})
+    end
+  end
+
+  test "multipart upload authorization rejects content-sensitive not and if predicates" do
+    upload = %Plug.Upload{content_type: "image/png", filename: "test.png", path: "/var/tmp/path"}
+
+    schemas = [
+      %{
+        "type" => "string",
+        "format" => "binary",
+        "not" => %{"maxLength" => 1}
+      },
+      %{
+        "type" => "string",
+        "format" => "binary",
+        "if" => %{"maxLength" => 1},
+        "then" => false,
+        "else" => true
+      }
+    ]
+
+    for file_schema <- schemas do
+      schema =
+        Oasis.Test.JSONSchema.compile!(%{
+          "type" => "object",
+          "properties" => %{"file" => file_schema}
+        })
+
+      param = %{"content" => %{"multipart/form-data" => %{"schema" => schema}}}
+
+      assert_raise Oasis.BadRequestError, fn ->
+        Validator.parse_and_validate!(param, "body", "requestBody", %{"file" => upload})
+      end
+    end
+  end
+
+  test "multipart upload authorization fails closed for dynamic refs" do
+    upload = %Plug.Upload{content_type: "image/png", filename: "test.png", path: "/var/tmp/path"}
+
+    schema =
+      Oasis.Test.JSONSchema.compile!(%{
+        "$defs" => %{"Constraint" => %{"minLength" => 1}},
+        "type" => "object",
+        "properties" => %{
+          "file" => %{
+            "$dynamicRef" => "#/$defs/Constraint",
+            "type" => "string",
+            "format" => "binary"
+          }
+        }
+      })
+
+    param = %{"content" => %{"multipart/form-data" => %{"schema" => schema}}}
 
     assert_raise Oasis.BadRequestError, ~r/Type mismatch/, fn ->
       Validator.parse_and_validate!(param, "body", "requestBody", %{"file" => upload})
@@ -1302,7 +1632,14 @@ defmodule Oasis.ValidatorTest do
         "multipart/form-data" => %{
           "schema" =>
             Oasis.Test.JSONSchema.compile!(
-              %{"properties" => %{"file" => %{"items" => %{}, "type" => "array"}}})
+              %{
+                "properties" => %{
+                  "file" => %{
+                    "items" => %{"type" => "string", "format" => "binary"},
+                    "type" => "array"
+                  }
+                }
+              })
         }
       }
     }

@@ -3,6 +3,13 @@ defmodule Mix.OasisTest do
 
   @jsonschex_compile_options [format_assertion: true, content_assertion: false]
 
+  defmodule RelativeIDLoader do
+    @expected_uri "https://example.test/child/defs/value.json"
+
+    def load(@expected_uri), do: {:ok, %{"type" => "integer"}}
+    def load(uri), do: {:error, {:unexpected_uri, uri}}
+  end
+
   defp valid_schema?(%JSONSchex.Types.Schema{} = schema, data) do
     JSONSchex.validate(schema, data) == :ok
   end
@@ -20,6 +27,10 @@ defmodule Mix.OasisTest do
       _other ->
         nil
     end)
+  end
+
+  defp generate_from_normalized(spec, opts \\ []) do
+    Mix.Oasis.new(spec, Keyword.put(opts, :normalized_parameters, true))
   end
 
   test "name space" do
@@ -351,6 +362,110 @@ defmodule Mix.OasisTest do
     refute valid_schema?(schema, "123")
   end
 
+  test "raw map generation normalizes a relative base URI before resolving refs" do
+    parent = self()
+    base_uri = "tmp/oasis/raw/openapi.yaml"
+    expected_uri = Path.expand("tmp/oasis/raw/common.yaml")
+
+    assert Oasis.Spec.Document.normalize_base_uri("https://example.test/openapi.yaml") ==
+             "https://example.test/openapi.yaml"
+
+    loader = fn uri ->
+      send(parent, {:relative_raw_map_loader, uri})
+
+      {:ok,
+       %{
+         document: %{
+           "components" => %{
+             "requestBodies" => %{
+               "Body" => %{
+                 "content" => %{
+                   "application/json" => %{"schema" => %{"type" => "integer"}}
+                 }
+               }
+             }
+           }
+         },
+         base_uri: uri
+       }}
+    end
+
+    spec = %{
+      "paths" => %{
+        "/value" => %{
+          "post" => %{
+            "operationId" => "relativeBaseLoader",
+            "requestBody" => %{"$ref" => "./common.yaml#/components/requestBodies/Body"}
+          }
+        }
+      }
+    }
+
+    _files = Mix.Oasis.new(spec, base_uri: base_uri, loader: loader)
+
+    assert_received {:relative_raw_map_loader, ^expected_uri}
+  end
+
+  test "raw map generation uses the normalized relative base URI for external JSON Schema refs" do
+    parent = self()
+    base_uri = "tmp/oasis/raw/openapi.yaml"
+    expected_uri = Path.expand("tmp/oasis/raw/schemas/value.json")
+
+    loader = fn uri ->
+      send(parent, {:relative_schema_loader, uri})
+      {:ok, %{document: %{"type" => "integer"}, base_uri: uri}}
+    end
+
+    spec = %{
+      "paths" => %{
+        "/value" => %{
+          "post" => %{
+            "operationId" => "relativeSchemaLoader",
+            "requestBody" => %{
+              "content" => %{
+                "application/json" => %{"schema" => %{"$ref" => "./schemas/value.json"}}
+              }
+            }
+          }
+        }
+      }
+    }
+
+    router =
+      spec
+      |> Mix.Oasis.new(base_uri: base_uri, loader: loader)
+      |> pre_plug_router("relativeSchemaLoader")
+
+    assert_received {:relative_schema_loader, ^expected_uri}
+    schema = get_in(router.body_schema, ["content", "application/json", "schema"])
+    assert valid_schema?(schema, 123)
+    refute valid_schema?(schema, "123")
+  end
+
+  test "raw map generation requires an explicit option for legacy normalized parameter groups" do
+    spec = %{
+      "paths" => %{
+        "/items" => %{
+          "get" => %{
+            "operationId" => "normalizedParameters",
+            "parameters" => %{"query" => [%{"name" => "id"}]}
+          }
+        }
+      }
+    }
+
+    assert_raise Oasis.InvalidSpecError, ~r/parameters.*must be an array/, fn ->
+      Mix.Oasis.new(spec, [])
+    end
+
+    router =
+      spec
+      |> Mix.Oasis.new(normalized_parameters: true)
+      |> pre_plug_router("normalizedParameters")
+
+    assert router.query_schema == nil
+  end
+
   test "raw map generation resolves referenced security schemes" do
     spec = %{
       "components" => %{
@@ -377,9 +492,8 @@ defmodule Mix.OasisTest do
   end
 
   describe "render_embedded_schemas/1" do
-    # Helper: eval the rendered source back into runtime data.
-    # The rendered source contains `JSONSchex.Schema.compile!/2` macro calls,
-    # so we prepend `require JSONSchex.Schema` before evaluating.
+    # Raw schemas render with `JSONSchex.Schema.compile!/2`, while already-compiled
+    # schemas render as exact literals. Requiring the macro is harmless for both.
     defp eval_rendered(rendered) do
       {value, _binding} = Code.eval_string("require JSONSchex.Schema; " <> rendered)
       value
@@ -472,39 +586,39 @@ defmodule Mix.OasisTest do
       end
     end
 
-    test "renders a top-level %JSONSchex.Types.Schema{} using its own compile options" do
-      raw = %{"type" => "string"}
+    test "embeds exact compiled schemas without losing a relative $id source context" do
+      raw = %{
+        "$id" => "child/schema.json",
+        "$ref" => "defs/value.json"
+      }
 
-      {:ok, compiled} =
-        JSONSchex.compile(raw, format_assertion: true, content_assertion: false)
+      assert {:ok, compiled} =
+               JSONSchex.compile(raw,
+                 base_uri: "https://example.test/root.json",
+                 loader: &RelativeIDLoader.load/1,
+                 format_assertion: true,
+                 content_assertion: false
+               )
 
-      rendered = Mix.Oasis.render_embedded_schemas(compiled)
+      assert compiled.source_id == "https://example.test/child/schema.json"
+      assert JSONSchex.validate(compiled, 7) == :ok
 
-      assert rendered =~ "JSONSchex.Schema.compile!"
-      # Compile options round-tripped from the source schema.
-      assert rendered =~ "format_assertion: true"
-      assert rendered =~ "content_assertion: false"
+      top_level_rendered = Mix.Oasis.render_embedded_schemas(compiled)
 
-      recompiled = eval_rendered(rendered)
-      assert %JSONSchex.Types.Schema{} = recompiled
-      assert JSONSchex.validate(recompiled, "hi") == :ok
-      assert {:error, _} = JSONSchex.validate(recompiled, 1)
-    end
+      nested_rendered =
+        Mix.Oasis.render_parameter_schemas(%{"value" => %{"schema" => compiled}})
 
-    test "renders a nested \"schema\" %JSONSchex.Types.Schema{} value using its own compile options" do
-      raw = %{"type" => "integer", "minimum" => 0}
+      top_level = eval_rendered(top_level_rendered)
+      %{"value" => %{"schema" => nested}} = eval_rendered(nested_rendered)
 
-      {:ok, compiled} =
-        JSONSchex.compile(raw, format_assertion: true, content_assertion: false)
+      refute top_level_rendered =~ "JSONSchex.Schema.compile!"
+      refute nested_rendered =~ "JSONSchex.Schema.compile!"
 
-      rendered =
-        Mix.Oasis.render_embedded_schemas(%{"name" => "age", "schema" => compiled})
-
-      %{"name" => "age", "schema" => recompiled} = eval_rendered(rendered)
-
-      assert %JSONSchex.Types.Schema{} = recompiled
-      assert JSONSchex.validate(recompiled, 1) == :ok
-      assert {:error, _} = JSONSchex.validate(recompiled, -1)
+      for round_tripped <- [top_level, nested] do
+        assert round_tripped == compiled
+        assert round_tripped.source_id == "https://example.test/child/schema.json"
+        assert JSONSchex.validate(round_tripped, 7) == :ok
+      end
     end
 
     test "keeps arbitrary schema-named list and tuple metadata as data" do
@@ -594,7 +708,7 @@ defmodule Mix.OasisTest do
 
       router =
         paths_spec
-        |> Mix.Oasis.new([])
+        |> generate_from_normalized()
         |> pre_plug_router("getThing")
 
       assert router.path_schema != nil
@@ -630,7 +744,7 @@ defmodule Mix.OasisTest do
       paths_spec = %{"paths" => %{"/" <> operation_id => %{"get" => operation}}}
 
       paths_spec
-      |> Mix.Oasis.new([])
+      |> generate_from_normalized()
       |> pre_plug_router(operation_id)
     end
 
@@ -1156,7 +1270,7 @@ defmodule Mix.OasisTest do
       }
     }
 
-    [router_file | plug_files] = Mix.Oasis.new(paths_spec, [])
+    [router_file | plug_files] = generate_from_normalized(paths_spec)
     {_, file_path, _, router_module_name, _} = router_file
     assert file_path == "lib/global_name_space_from_paths_object/hello/my_router.ex"
     assert router_module_name == GlobalNameSpaceFromPathsObject.Hello.MyRouter
@@ -1169,7 +1283,7 @@ defmodule Mix.OasisTest do
     assert router_module_name == GlobalNameSpaceFromPathsObject.GetId
 
     [router_file | _plug_files] =
-      Mix.Oasis.new(paths_spec, name_space: "My", router: "V1.AppRouter")
+      generate_from_normalized(paths_spec, name_space: "My", router: "V1.AppRouter")
 
     {_, file_path, _, router_module_name, _} = router_file
     assert file_path == "lib/my/v1/app_router.ex"
@@ -1193,7 +1307,7 @@ defmodule Mix.OasisTest do
       }
     }
 
-    [router_file | plug_files] = Mix.Oasis.new(paths_spec, [])
+    [router_file | plug_files] = generate_from_normalized(paths_spec)
     {_, file_path, _, router_module_name, _} = router_file
     assert file_path == "lib/oasis/gen/router.ex"
     assert router_module_name == Oasis.Gen.Router
@@ -1217,7 +1331,7 @@ defmodule Mix.OasisTest do
     end)
 
     paths_spec2 = put_in(paths_spec, ["paths", "x-oasis-name-space"], "Global")
-    [router_file | plug_files] = Mix.Oasis.new(paths_spec2, [])
+    [router_file | plug_files] = generate_from_normalized(paths_spec2)
     {_, file_path, _, router_module_name, _} = router_file
     assert file_path == "lib/global/router.ex"
     assert router_module_name == Global.Router
@@ -1240,7 +1354,9 @@ defmodule Mix.OasisTest do
         assert router.plug_module == DeleteNameSpaceFromOperationObject.DeleteId
     end)
 
-    [router_file | plug_files] = Mix.Oasis.new(paths_spec2, name_space: "From.Command")
+    [router_file | plug_files] =
+      generate_from_normalized(paths_spec2, name_space: "From.Command")
+
     {_, file_path, _, router_module_name, _} = router_file
     assert file_path == "lib/from/command/router.ex"
     assert router_module_name == From.Command.Router
@@ -1305,7 +1421,7 @@ defmodule Mix.OasisTest do
     }
 
     paths_spec = %{"paths" => %{"/test" => %{"get" => operation}}}
-    router = paths_spec |> Mix.Oasis.new([]) |> pre_plug_router("contentParameter")
+    router = paths_spec |> generate_from_normalized() |> pre_plug_router("contentParameter")
     definition = router.query_schema["filter"]
     media = get_in(definition, ["content", "application/json"])
 
@@ -1329,7 +1445,7 @@ defmodule Mix.OasisTest do
     }
 
     paths_spec = %{"paths" => %{"/test" => %{"get" => operation}}}
-    [router_file | _plug_files] = Mix.Oasis.new(paths_spec, [])
+    [router_file | _plug_files] = generate_from_normalized(paths_spec)
     {_, _, _, _, binding} = router_file
     Enum.map(binding.routers, fn router -> assert router.query_schema == nil end)
   end
@@ -1359,6 +1475,90 @@ defmodule Mix.OasisTest do
     body_schema = binding.body_schema
     assert Map.get(body_schema, "required") == true
     assert is_map(get_in(body_schema, ["content", "text/plain"]))
+  end
+
+  test "Mix.Oasis.new/2 injects the JSON parser for vendor-only +json request bodies" do
+    operation = %{
+      "operationId" => "vendorJson",
+      "requestBody" => %{
+        "content" => %{
+          "application/vnd.api+json" => %{
+            "schema" => %{"type" => "object"}
+          },
+          "application/vnd.oasis.audit+json; charset=utf-8" => %{
+            "schema" => %{"type" => "object"}
+          }
+        }
+      }
+    }
+
+    router =
+      %{"paths" => %{"/events" => %{"post" => operation}}}
+      |> Mix.Oasis.new([])
+      |> pre_plug_router("vendorJson")
+
+    assert is_binary(router.plug_parsers)
+    assert router.plug_parsers =~ "parsers: [:json]"
+    assert router.plug_parsers =~ "json_decoder: Jason"
+  end
+
+  test "Mix.Oasis.new/2 maps request-body media ranges to Plug parser configuration" do
+    cases = [
+      {"application/*", [:json, :urlencoded], true},
+      {"multipart/*", [:multipart], false},
+      {"application/x-www-form-urlencoded", [:urlencoded], false},
+      {"application/xml", [], false}
+    ]
+
+    for {media_type, expected_parsers, json_decoder?} <- cases do
+      operation_id = "parser_#{System.unique_integer([:positive])}"
+
+      operation = %{
+        "operationId" => operation_id,
+        "requestBody" => %{
+          "content" => %{media_type => %{"schema" => %{"type" => "object"}}}
+        }
+      }
+
+      router =
+        %{"paths" => %{"/parser" => %{"post" => operation}}}
+        |> Mix.Oasis.new([])
+        |> pre_plug_router(operation_id)
+
+      if expected_parsers == [] do
+        assert router.plug_parsers == nil
+      else
+        assert is_binary(router.plug_parsers)
+        Enum.each(expected_parsers, &assert(router.plug_parsers =~ inspect(&1)))
+
+        for parser <- [:json, :multipart, :urlencoded] -- expected_parsers do
+          refute router.plug_parsers =~ inspect(parser)
+        end
+
+        assert (router.plug_parsers =~ "json_decoder: Jason") == json_decoder?
+      end
+    end
+  end
+
+  test "Mix.Oasis.new/2 injects supported parsers for a wildcard request body" do
+    operation = %{
+      "operationId" => "wildcardBody",
+      "requestBody" => %{
+        "content" => %{
+          "*/*" => %{"schema" => %{"type" => "object"}}
+        }
+      }
+    }
+
+    router =
+      %{"paths" => %{"/wildcard" => %{"post" => operation}}}
+      |> Mix.Oasis.new([])
+      |> pre_plug_router("wildcardBody")
+
+    assert router.plug_parsers =~ ":json"
+    assert router.plug_parsers =~ ":multipart"
+    assert router.plug_parsers =~ ":urlencoded"
+    assert router.plug_parsers =~ "json_decoder: Jason"
   end
 
   test "Mix.Oasis.new/2 with multipart request body" do
@@ -1455,7 +1655,7 @@ defmodule Mix.OasisTest do
     }
 
     paths_spec = %{"paths" => %{"/my_post" => %{"post" => post, "get" => get}}}
-    files = Mix.Oasis.new(paths_spec, [])
+    files = generate_from_normalized(paths_spec)
     assert length(files) == 5
     [router_file | plug_files] = files
 
@@ -1554,7 +1754,7 @@ defmodule Mix.OasisTest do
       }
     }
 
-    files = Mix.Oasis.new(paths_spec, router: "my_test_router")
+    files = generate_from_normalized(paths_spec, router: "my_test_router")
     assert length(files) == 7
     [router_file | plug_files] = files
 
@@ -1632,7 +1832,7 @@ defmodule Mix.OasisTest do
       }
     }
 
-    [router | plugs] = Mix.Oasis.new(paths_spec, name_space: "Try.MyOpenAPI")
+    [router | plugs] = generate_from_normalized(paths_spec, name_space: "Try.MyOpenAPI")
     {_, router_file_path, _, router_module_name, binding} = router
     assert router_file_path == "lib/try/my_open_api/router.ex"
     assert router_module_name == Try.MyOpenApi.Router
@@ -1652,7 +1852,7 @@ defmodule Mix.OasisTest do
     assert binding.plug_module == Try.MyOpenApi.Hello
 
     [router | plugs] =
-      Mix.Oasis.new(paths_spec, name_space: "Try.Test.OpenAPI2", router: "SuperRouter")
+      generate_from_normalized(paths_spec, name_space: "Try.Test.OpenAPI2", router: "SuperRouter")
 
     {_, router_file_path, _, router_module_name, binding} = router
     assert router_file_path == "lib/try/test/open_api2/super_router.ex"
@@ -1695,7 +1895,7 @@ defmodule Mix.OasisTest do
     }
 
     [_router, _pre_say_hello, _say_hello, bearer_auth_file] =
-      Mix.Oasis.new(paths_spec, name_space: "Security.MyOpenAPI")
+      generate_from_normalized(paths_spec, name_space: "Security.MyOpenAPI")
 
     {_, path, template, module, binding} = bearer_auth_file
     assert path == "lib/security/my_open_api/my_bearer_auth.ex"
@@ -1734,7 +1934,9 @@ defmodule Mix.OasisTest do
       }
     }
 
-    [_router, _pre_say_hello, _say_hello, bearer_auth_file] = Mix.Oasis.new(paths_spec, [])
+    [_router, _pre_say_hello, _say_hello, bearer_auth_file] =
+      generate_from_normalized(paths_spec)
+
     {_, path, template, module, binding} = bearer_auth_file
     assert path == "lib/oasis/gen/hello_bearer_auth.ex"
     assert template == "bearer_token.ex.eex"
@@ -1779,7 +1981,7 @@ defmodule Mix.OasisTest do
       "security" => [%{"GlobalBearerAuth" => []}]
     }
 
-    [_router | plugs_pairs] = Mix.Oasis.new(paths_spec, [])
+    [_router | plugs_pairs] = generate_from_normalized(paths_spec)
 
     plugs_pairs
     |> Enum.chunk_every(3)
@@ -1837,7 +2039,7 @@ defmodule Mix.OasisTest do
     }
 
     [_router, _pre_say_hello, _say_hello, bearer_auth_file] =
-      Mix.Oasis.new(paths_spec, name_space: "Security.MyOpenAPI")
+      generate_from_normalized(paths_spec, name_space: "Security.MyOpenAPI")
 
     {_, path, template, module, binding} = bearer_auth_file
     assert path == "lib/security/my_open_api/my_bearer_auth.ex"
@@ -1875,7 +2077,7 @@ defmodule Mix.OasisTest do
       }
     }
 
-    [_router | files] = Mix.Oasis.new(paths_spec, name_space: "Security.OpenApi")
+    [_router | files] = generate_from_normalized(paths_spec, name_space: "Security.OpenApi")
     {say_hello_files, say_bye_files} = Enum.split(files, 3)
     [_, _, bearer_auth_file] = say_hello_files
     {_, path, "bearer_token.ex.eex", module, binding} = bearer_auth_file

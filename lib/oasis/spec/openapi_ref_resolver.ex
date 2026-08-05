@@ -1,6 +1,6 @@
 defmodule Oasis.Spec.OpenAPIRefResolver do
   @moduledoc """
-  Resolves OpenAPI Reference Objects needed by Oasis generation.
+  Resolves the structural OpenAPI Reference Objects selected by Oasis preparation.
 
   This module is intentionally OpenAPI-aware and deliberately **not** a generic
   JSON Schema `$ref` expander. It selects structural OpenAPI Reference Object
@@ -81,9 +81,11 @@ defmodule Oasis.Spec.OpenAPIRefResolver do
   @doc """
   Resolves OpenAPI Reference Objects inside a loaded `Oasis.Spec.Document`.
 
-  The returned document keeps Schema Object refs intact, but path items,
-  parameters, request bodies, responses, and security schemes that Oasis needs
-  for generation are dereferenced.
+  The returned document keeps Schema Object refs intact, but selected path items,
+  parameters, request bodies, responses, and security schemes are dereferenced.
+  Response refs are prepared eagerly even though current request-handler
+  generation does not otherwise consume response schemas; a missing selected
+  response resource therefore remains an invalid specification.
   """
   @spec resolve(Document.t()) :: Document.t()
   def resolve(%Document{schema: schema} = document) do

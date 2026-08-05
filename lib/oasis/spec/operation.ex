@@ -1,24 +1,53 @@
 defmodule Oasis.Spec.Operation do
   @moduledoc false
 
+  alias Oasis.InvalidSpecError
   alias Oasis.Spec.Parameter
 
   def build(path_expr, operation, global_params) do
-    {operation, _sources} = build_with_sources(path_expr, nil, operation, global_params)
+    {operation, _sources} = build_with_sources(path_expr, nil, operation, global_params, false)
     operation
   end
 
   @doc false
-  def build_with_sources(_path_expr, _http_verb, %{"parameters" => parameters} = operation, global_params)
-      when is_map(parameters) and global_params in [nil, []] do
-    # `Path.build/1` is intentionally tolerant of an already-normalized operation.
-    # This keeps the map overload used by existing generator callers idempotent.
-    {operation, %{}}
+  def build_with_sources(path_expr, http_verb, operation, global_params) do
+    build_with_sources(path_expr, http_verb, operation, global_params, false)
   end
 
-  def build_with_sources(path_expr, http_verb, operation, global_params) do
-    global_params = List.wrap(global_params)
-    operation_params = List.wrap(operation["parameters"])
+  @doc false
+  def build_with_sources(
+        path_expr,
+        http_verb,
+        %{"parameters" => parameters} = operation,
+        global_params,
+        true
+      )
+      when is_map(parameters) and global_params in [nil, []] do
+    if normalized_parameter_groups?(parameters) do
+      # Preserve the legacy map input accepted by Mix.Oasis.new/2, but require
+      # the complete normalized shape instead of treating every map as prepared.
+      {operation, %{}}
+    else
+      raise InvalidSpecError,
+            "Operation `#{http_verb}` parameters in path `#{path_expr}` must be an array or normalized location map, got: #{inspect(parameters, pretty: true)}"
+    end
+  end
+
+  def build_with_sources(path_expr, http_verb, operation, _global_params, _allow_normalized_parameters?)
+      when not is_map(operation) do
+    raise InvalidSpecError,
+          "Operation Object for `#{http_verb}` in path `#{path_expr}` must be an object, got: #{inspect(operation, pretty: true)}"
+  end
+
+  def build_with_sources(
+        path_expr,
+        http_verb,
+        operation,
+        global_params,
+        _allow_normalized_parameters?
+      ) do
+    global_params = parameter_list!(global_params, path_expr, "Path Item")
+    operation_params = parameter_list!(operation["parameters"], path_expr, "Operation `#{http_verb}`")
 
     global_params =
       global_params
@@ -40,6 +69,22 @@ defmodule Oasis.Spec.Operation do
       |> override_duplicated_name(path_expr)
 
     {Map.put(operation, "parameters", parameters), sources}
+  end
+
+  defp normalized_parameter_groups?(parameters) do
+    allowed_locations = ["query", "header", "cookie", "path"]
+
+    Enum.all?(parameters, fn {location, definitions} ->
+      location in allowed_locations and is_list(definitions) and Enum.all?(definitions, &is_map/1)
+    end)
+  end
+
+  defp parameter_list!(nil, _path_expr, _owner), do: []
+  defp parameter_list!(parameters, _path_expr, _owner) when is_list(parameters), do: parameters
+
+  defp parameter_list!(parameters, path_expr, owner) do
+    raise InvalidSpecError,
+          "#{owner} parameters in path `#{path_expr}` must be an array, got: #{inspect(parameters, pretty: true)}"
   end
 
   defp group_by_location(parameters) do

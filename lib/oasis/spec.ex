@@ -8,10 +8,12 @@ defmodule Oasis.Spec do
   JSONSchex, and normalizes path/operation data.
 
   Since the JSONSchex boundary migration, successful reads return an
-  `Oasis.Spec.Document` rather than the decoded OpenAPI map directly. Callers
-  that previously consumed a map should use `document.schema`; generation code
-  should retain the complete document so source paths and URI aliases remain
-  available.
+  `Oasis.Spec.Document` rather than the `%ExJsonSchema.Schema.Root{}` returned by
+  Oasis 0.6. Callers that only need the normalized generation view may inspect
+  `document.schema`; generation code should retain the complete document so the
+  reference root, source path, pointer sidecars, and URI aliases remain available.
+  Unlike the old eagerly expanded root, Schema Object references remain intact
+  for JSONSchex.
   """
 
   alias __MODULE__.{Document, OpenAPIRefResolver}
@@ -19,8 +21,9 @@ defmodule Oasis.Spec do
   @doc """
   Reads and prepares an OpenAPI YAML or JSON document.
 
-  Returns an `Oasis.Spec.Document` on success. File and specification failures
-  are returned as `{:error, exception}` tuples.
+  Returns an `Oasis.Spec.Document` on success. File loading/decoding failures and
+  invalid OpenAPI structures recognized during preparation are returned as
+  `{:error, exception}` tuples.
   """
   @spec read(Path.t()) :: Document.t() | {:error, Exception.t()}
   def read(path) do

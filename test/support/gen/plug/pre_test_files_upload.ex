@@ -19,7 +19,10 @@ defmodule Oasis.Gen.Plug.PreTestFilesUpload do
             JSONSchex.Schema.compile!(
               %{
                 "properties" => %{
-                  "file" => %{"items" => %{}, "type" => "array"},
+                  "file" => %{
+                    "items" => %{"format" => "binary", "type" => "string"},
+                    "type" => "array"
+                  },
                   "logo" => %{"format" => "binary", "type" => "string"},
                   "id" => %{"maximum" => 10, "type" => "integer"}
                 }

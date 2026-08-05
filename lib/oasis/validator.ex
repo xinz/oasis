@@ -9,23 +9,33 @@ defmodule Oasis.Validator do
           name :: String.t(),
           value :: term()
         ) :: term()
-  def parse_and_validate!(%{"schema" => _schema} = definition, use_in, name, value) do
+  def parse_and_validate!(definition, use_in, name, value) do
+    parse_and_validate!(definition, use_in, name, value, present?: value != nil)
+  end
+
+  @doc false
+  @spec parse_and_validate!(
+          param :: map() | nil,
+          use_in :: String.t(),
+          name :: String.t(),
+          value :: term(),
+          opts :: keyword()
+        ) :: term()
+  def parse_and_validate!(%{"schema" => _schema} = definition, use_in, name, value, opts) do
     definition
-    |> check_required!(use_in, name, value)
+    |> check_required!(use_in, name, value, Keyword.get(opts, :present?, value != nil))
     |> process()
   end
 
-  def parse_and_validate!(%{"content" => _content} = definition, use_in, name, value) do
+  def parse_and_validate!(%{"content" => _content} = definition, use_in, name, value, opts) do
     definition
-    |> check_required!(use_in, name, value)
+    |> check_required!(use_in, name, value, Keyword.get(opts, :present?, value != nil))
     |> process()
   end
 
-  def parse_and_validate!(_, _, _, value) do
-    value
-  end
+  def parse_and_validate!(_definition, _use_in, _name, value, _opts), do: value
 
-  defp check_required!(%{"required" => true}, use_in, param_name, nil) do
+  defp check_required!(%{"required" => true}, use_in, param_name, _value, false) do
     raise BadRequestError,
       error: %BadRequestError.Required{},
       use_in: use_in,
@@ -33,24 +43,19 @@ defmodule Oasis.Validator do
       message: "Missing a required parameter"
   end
 
-  defp check_required!(definition, use_in, name, value) do
-    {definition, use_in, name, value}
+  defp check_required!(definition, use_in, name, value, present?) do
+    {definition, use_in, name, value, present?}
   end
 
-  defp process({_, _use_in, _name, nil}) do
-    nil
-  end
+  defp process({_definition, _use_in, _name, value, false}), do: value
 
-  defp process({%{"schema" => json_schema_root}, use_in, name, value}) do
+  defp process({%{"schema" => json_schema_root}, use_in, name, value, true}) do
     do_parse_and_validate!(json_schema_root, use_in, name, value)
   end
 
-  defp process({%{"content" => content}, use_in, name, value}) do
+  defp process({%{"content" => content}, use_in, name, value, true}) do
     [{content_type, media_type} | _] = Map.to_list(content)
-
-    content_type
-    |> String.downcase()
-    |> process_media_type(media_type, use_in, name, value)
+    process_media_type(content_type, media_type, use_in, name, value)
   end
 
   defp do_parse_and_validate!(
@@ -82,17 +87,20 @@ defmodule Oasis.Validator do
 
     else
       parsed ->
-
         result =
-          json_schema_root
-          |> json_schema_validate(parsed)
-          |> recheck_after_validate(json_schema_root, opts)
+          if opts[:multipart_uploads?] == true do
+            Oasis.MultipartUpload.validate(json_schema_root, parsed)
+          else
+            Oasis.MultipartUpload.validate_non_multipart(json_schema_root, parsed)
+          end
 
         case result do
-          {:ok, ^parsed} ->
+          :ok ->
             parsed
 
-          {:error, %JSONSchex.Types.Error{} = error} ->
+          {:error, errors} ->
+            error = first_error!(errors)
+
             raise BadRequestError,
               error: %BadRequestError.JSONSchemaValidationFailed{error: error, path: path_pointer(error)},
               use_in: use_in,
@@ -104,258 +112,23 @@ defmodule Oasis.Validator do
 
 
 
-  defp json_schema_validate(%JSONSchex.Types.Schema{} = json_schema_root, parsed) do
-    {JSONSchex.validate(json_schema_root, parsed), parsed}
-  end
-
-  defp recheck_after_validate({:ok, parsed}, _schema, _opts), do: {:ok, parsed}
-
-  defp recheck_after_validate({{:error, errors}, parsed}, schema, opts) do
-    errors =
-      errors
-      |> Enum.filter(&error_to_attention?(&1, parsed, schema, opts))
-      |> Enum.sort_by(fn error -> {root_first_path(error), error_priority(error.rule)} end)
-
-    case errors do
-      [] ->
-        {:ok, parsed}
-
-      [error | _] ->
-        {:error, error}
-    end
+  defp first_error!([%JSONSchex.Types.Error{} | _] = errors) do
+    Enum.min_by(errors, fn error -> {root_first_path(error), error_priority(error.rule)} end)
   end
 
   # JSONSchex stores validation paths leaf-first. Keep its error untouched for
-  # callers and derive a root-first path only where Oasis needs to traverse or
-  # render the request value.
+  # callers and derive a root-first path only for deterministic selection and
+  # public JSON Pointer rendering.
   defp root_first_path(%JSONSchex.Types.Error{path: path}) do
     path
     |> List.wrap()
     |> Enum.reverse()
   end
 
-  defp error_to_attention?(%JSONSchex.Types.Error{} = error, parsed, schema, opts) do
-    path = root_first_path(error)
-
-    case value_in_path(path, parsed) do
-      %Plug.Upload{} ->
-        not (opts[:multipart_uploads?] == true and upload_schema?(schema, path))
-
-      _ ->
-        true
-    end
-  end
-
-  defp upload_schema?(%JSONSchex.Types.Schema{} = root, path) do
-    root
-    |> schemas_at_path(path, root)
-    |> Enum.any?(&(upload_compatibility(&1, root, []) == :compatible))
-  end
-
-  defp schemas_at_path(schema, [], _root), do: [schema]
-
-  defp schemas_at_path(schema, [segment | rest], root) do
-    schema
-    |> expand_schema(root, [])
-    |> Enum.flat_map(&child_schemas(&1, segment))
-    |> Enum.flat_map(&schemas_at_path(&1, rest, root))
-  end
-
-  defp expand_schema(%JSONSchex.Types.Schema{} = schema, root, visited_refs) do
-    expanded =
-      Enum.flat_map(schema.rules || [], fn
-        %JSONSchex.Types.Rule{name: :ref, params: %{resolved_uri: uri}} ->
-          if uri in visited_refs do
-            []
-          else
-            case Map.get(root.defs || %{}, uri) do
-              %JSONSchex.Types.Schema{} = target ->
-                expand_schema(target, root, [uri | visited_refs])
-
-              _missing ->
-                []
-            end
-          end
-
-        %JSONSchex.Types.Rule{name: name, params: schemas}
-        when name in [:allOf, :anyOf, :oneOf] ->
-          Enum.flat_map(schemas, &expand_schema(&1, root, visited_refs))
-
-        %JSONSchex.Types.Rule{name: :if, params: branches} ->
-          branches
-          |> Map.values()
-          |> Enum.reject(&is_nil/1)
-          |> Enum.flat_map(&expand_schema(&1, root, visited_refs))
-
-        _rule ->
-          []
-      end)
-
-    [schema | expanded]
-  end
-
-  defp child_schemas(%JSONSchex.Types.Schema{rules: rules}, segment) when is_binary(segment) do
-    rules = rules || []
-
-    properties =
-      for %JSONSchex.Types.Rule{name: :properties, params: properties} <- rules,
-          {^segment, schema} <- properties,
-          do: schema
-
-    patterns =
-      for %JSONSchex.Types.Rule{name: :patternProperties, params: patterns} <- rules,
-          {regex, schema} <- patterns,
-          Regex.match?(regex, segment),
-          do: schema
-
-    additional =
-      for %JSONSchex.Types.Rule{
-            name: :additionalProperties,
-            params: %{schema: schema, known_props: known, patterns: additional_patterns}
-          } <- rules,
-          not MapSet.member?(known, segment),
-          not Enum.any?(additional_patterns, &Regex.match?(&1, segment)),
-          do: schema
-
-    properties ++ patterns ++ additional
-  end
-
-  defp child_schemas(%JSONSchex.Types.Schema{rules: rules}, segment) when is_integer(segment) do
-    rules = rules || []
-
-    prefix =
-      for %JSONSchex.Types.Rule{name: :prefixItems, params: schemas} <- rules,
-          schema = Enum.at(schemas, segment),
-          schema != nil,
-          do: schema
-
-    items =
-      for %JSONSchex.Types.Rule{
-            name: :items,
-            params: %{start_index: start_index, schema: schema}
-          } <- rules,
-          segment >= start_index,
-          do: schema
-
-    prefix ++ items
-  end
-
-  defp child_schemas(_schema, _segment), do: []
-
-  defp upload_compatibility(%JSONSchex.Types.Schema{rules: rules}, root, visited_refs) do
-    rules = rules || []
-    local = local_upload_compatibility(rules)
-
-    refs =
-      for %JSONSchex.Types.Rule{name: :ref, params: %{resolved_uri: uri}} <- rules do
-        if uri in visited_refs do
-          :neutral
-        else
-          case Map.get(root.defs || %{}, uri) do
-            %JSONSchex.Types.Schema{} = target ->
-              upload_compatibility(target, root, [uri | visited_refs])
-
-            _missing ->
-              :incompatible
-          end
-        end
-      end
-
-    all_of =
-      for %JSONSchex.Types.Rule{name: :allOf, params: schemas} <- rules,
-          schema <- schemas,
-          do: upload_compatibility(schema, root, visited_refs)
-
-    base = combine_upload_all([local | refs ++ all_of])
-
-    applicators =
-      Enum.flat_map(rules, fn
-        %JSONSchex.Types.Rule{name: :anyOf, params: schemas} ->
-          statuses = Enum.map(schemas, &upload_compatibility(&1, root, visited_refs))
-          [if(:compatible in statuses, do: :compatible, else: :incompatible)]
-
-        %JSONSchex.Types.Rule{name: :oneOf, params: schemas} ->
-          statuses = Enum.map(schemas, &upload_compatibility(&1, root, visited_refs))
-          valid = Enum.reject(statuses, &(&1 == :incompatible))
-          [if(valid == [:compatible], do: :compatible, else: :incompatible)]
-
-        %JSONSchex.Types.Rule{name: name} when name in [:if, :not] ->
-          [:incompatible]
-
-        _rule ->
-          []
-      end)
-
-    combine_upload_all([base | applicators])
-  end
-
-  defp local_upload_compatibility(rules) do
-    type_status =
-      Enum.find_value(rules, :neutral, fn
-        %JSONSchex.Types.Rule{name: :type, params: "string"} -> :neutral
-        %JSONSchex.Types.Rule{name: :type, params: types} when is_list(types) ->
-          if "string" in types, do: :neutral, else: :incompatible
-
-        %JSONSchex.Types.Rule{name: :type} -> :incompatible
-        _rule -> nil
-      end)
-
-    format_status =
-      Enum.find_value(rules, :neutral, fn
-        %JSONSchex.Types.Rule{name: :format, params: format} when format in ["binary", "byte"] ->
-          :compatible
-
-        %JSONSchex.Types.Rule{name: :format} ->
-          :incompatible
-
-        _rule ->
-          nil
-      end)
-
-    unsupported_string_assertion? =
-      Enum.any?(rules, fn
-        %JSONSchex.Types.Rule{name: name}
-        when name in [:const, :enum, :pattern, :minLength, :maxLength, :contentEncoding, :contentMediaType,
-                      :contentSchema] ->
-          true
-
-        _rule ->
-          false
-      end)
-
-    if unsupported_string_assertion? do
-      :incompatible
-    else
-      combine_upload_all([type_status, format_status])
-    end
-  end
-
-  defp combine_upload_all(statuses) do
-    cond do
-      :incompatible in statuses -> :incompatible
-      :compatible in statuses -> :compatible
-      true -> :neutral
-    end
-  end
-
   defp error_priority(:type), do: 0
   defp error_priority(:required), do: 1
   defp error_priority(:dependentRequired), do: 1
   defp error_priority(_rule), do: 9
-
-
-
-  defp value_in_path([], parsed), do: parsed
-
-  defp value_in_path([segment | rest], parsed) when is_map(parsed) do
-    value_in_path(rest, Map.get(parsed, segment))
-  end
-
-  defp value_in_path([segment | rest], parsed) when is_list(parsed) and is_integer(segment) do
-    value_in_path(rest, Enum.at(parsed, segment))
-  end
-
-  defp value_in_path(_path, _parsed), do: nil
 
   defp format_error(%JSONSchex.Types.Error{rule: :minimum, context: %{contrast: minimum}}) do
     "Expected the value to be >= #{minimum}"
@@ -438,71 +211,24 @@ defmodule Oasis.Validator do
   end
 
   defp process_media_type(
-         "text/plain" <> _charset,
+         content_type,
          %{"schema" => json_schema_root},
          use_in,
          name,
          value
        ) do
-    do_parse_and_validate!(json_schema_root, use_in, name, value)
-  end
+    case Oasis.MediaType.validation_kind(content_type) do
+      :multipart ->
+        do_parse_and_validate!(json_schema_root, use_in, name, value, multipart_uploads?: true)
 
-  defp process_media_type(
-         "application/json" <> _charset,
-         %{"schema" => json_schema_root},
-         use_in,
-         name,
-         value
-       ) do
-    do_parse_and_validate!(json_schema_root, use_in, name, value)
-  end
+      kind when kind in [:json, :form, :text] ->
+        do_parse_and_validate!(json_schema_root, use_in, name, value)
 
-  defp process_media_type(
-         "application/x-www-form-urlencoded" <> _charset,
-         %{"schema" => json_schema_root},
-         use_in,
-         name,
-         value
-       ) do
-    do_parse_and_validate!(json_schema_root, use_in, name, value)
-  end
-
-  defp process_media_type(
-         "multipart/form-data" <> _boundary,
-         %{"schema" => json_schema_root},
-         use_in,
-         name,
-         value
-       ) do
-    do_parse_and_validate!(json_schema_root, use_in, name, value, multipart_uploads?: true)
-  end
-
-  defp process_media_type(
-         "multipart/mixed" <> _boundary,
-         %{"schema" => json_schema_root},
-         use_in,
-         name,
-         value
-       ) do
-    do_parse_and_validate!(json_schema_root, use_in, name, value, multipart_uploads?: true)
-  end
-
-  defp process_media_type(
-         "application/" <> subtype,
-         %{"schema" => json_schema_root},
-         use_in,
-         name,
-         value
-       ) do
-    if String.ends_with?(subtype, "+json") do
-      do_parse_and_validate!(json_schema_root, use_in, name, value)
-    else
-      value
+      :unsupported ->
+        value
     end
   end
 
-  defp process_media_type(_content_type, _schema, _use_in, _name, value) do
-    value
-  end
+  defp process_media_type(_content_type, _schema, _use_in, _name, value), do: value
 
 end

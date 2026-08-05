@@ -5,10 +5,11 @@ defmodule Mix.Oasis.Router do
 
   Most fields drive the generated `pre_*.ex` / `*.ex` files and the umbrella
   `router.ex` file. The `:source_meta` field is **public** and stable: it carries
-  the OpenAPI source location for every schema fragment Oasis extracted from the
-  operation, in the shape of the user's original OpenAPI document (not Oasis's
-  internal post-processed form). It is intended for tooling that consumes
-  generation output and for the mix task's own diagnostics.
+  the logical OpenAPI source identity for every schema fragment Oasis extracted
+  from the operation. Paths retain the user's OpenAPI URL spelling; parameter
+  names use Oasis's runtime identity (notably, header names are lowercase). It is
+  intended for tooling that consumes generation output and for the mix task's
+  own diagnostics.
 
   Generated runtime modules deliberately do **not** embed `:source_meta`. Runtime
   validation errors carry enough route/parameter context via `Plug.Conn` plus
@@ -42,7 +43,9 @@ defmodule Mix.Oasis.Router do
   (sensitive to reordering) and would need to disambiguate path-item-level
   vs operation-level parameters. Tooling that needs a JSON Pointer into the
   raw document can build one from `path` + `http_verb` (and, if needed,
-  scan the operation's `parameters` array for a matching `(in, name)`).
+  scan the operation's `parameters` array for a matching `(in, name)`). Header
+  names must be compared case-insensitively because `parameter_name` is the
+  lowercase runtime identity.
 
   and `body_meta()` is:
 
@@ -490,25 +493,16 @@ defmodule Mix.Oasis.Router do
     end
   end
 
-  defp update_in_plug_parsers("application/x-www-form-urlencoded" <> _, map) do
-    update_in(map[:parsers], &([:urlencoded] ++ &1))
-  end
+  defp update_in_plug_parsers(content_type, map) do
+    parsers = Oasis.MediaType.parsers(content_type)
+    map = update_in(map[:parsers], &(parsers ++ &1))
 
-  defp update_in_plug_parsers("multipart/form-data" <> _, map) do
-    update_in(map[:parsers], &([:multipart] ++ &1))
+    if :json in parsers do
+      Map.put(map, :json_decoder, Jason)
+    else
+      map
+    end
   end
-
-  defp update_in_plug_parsers("multipart/mixed" <> _, map) do
-    update_in(map[:parsers], &([:multipart] ++ &1))
-  end
-
-  defp update_in_plug_parsers("application/json" <> _, map) do
-    map
-    |> update_in([:parsers], &([:json] ++ &1))
-    |> Map.put(:json_decoder, Jason)
-  end
-
-  defp update_in_plug_parsers(_, map), do: map
 
   defp may_inject_request_validator(apps, %{body_schema: body_schema} = router)
        when is_map(body_schema) do
