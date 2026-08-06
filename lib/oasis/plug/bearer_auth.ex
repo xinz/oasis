@@ -129,8 +129,8 @@ defmodule Oasis.Plug.BearerAuth do
           # write your rules to verify the token,
           # and return the expected results in:
           #   {:ok, data}, verified
-          #   {:error, :expired}, expired token
-          #   {:error, :invalid}, invalid token
+          #   {:error, "expired"}, expired token
+          #   {:error, "invalid"}, invalid token
         end
       end
   """
@@ -249,8 +249,11 @@ defmodule Oasis.Plug.BearerAuth do
     case result do
       {:ok, _} ->
         result
-      {:error, :expired} ->
+
+      # Backward-compatible with older user callbacks that still return atoms.
+      {:error, status} when status in ["expired", :expired] ->
         {:error, "expired_token"}
+
       {:error, _invalid} ->
         {:error, "invalid_token"}
     end

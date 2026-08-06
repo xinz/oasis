@@ -1,0 +1,5 @@
+paths:
+  /users/{id}:
+    get:
+      parameters:
+        - $ref: './common.yaml#/components/parameters/UserId'

@@ -3,30 +3,31 @@ defmodule Oasis.Gen.Plug.PrePostTestHMACWithBody do
   # run `mix oas.gen.plug` task command with the OpenAPI Specification file.
   use Oasis.Controller
   use Plug.ErrorHandler
+  require JSONSchex.Schema
 
-  plug(
-    Plug.Parsers,
+  plug(Plug.Parsers,
     parsers: [:json],
     json_decoder: Jason,
     pass: ["*/*"],
     body_reader: {Oasis.CacheRawBodyReader, :read_body, []}
   )
 
-  plug(
-    Oasis.Plug.RequestValidator,
+  plug(Oasis.Plug.RequestValidator,
     body_schema: %{
       "content" => %{
         "application/json" => %{
-          "schema" => %ExJsonSchema.Schema.Root{
-            schema: %{"properties" => %{"a" => %{"type" => "string"}}, "type" => "object"}
-          }
+          "schema" =>
+            JSONSchex.Schema.compile!(
+              %{"properties" => %{"a" => %{"type" => "string"}}, "type" => "object"},
+              format_assertion: true,
+              content_assertion: false
+            )
         }
       }
     }
   )
 
-  plug(
-    Oasis.Plug.HMACAuth,
+  plug(Oasis.Plug.HMACAuth,
     signed_headers: "host;x-oasis-body-sha256",
     algorithm: :sha256,
     security: Oasis.Gen.HMACAuthWithBody

@@ -1,70 +1,54 @@
 defmodule Oasis.Spec do
-  @moduledoc false
+  @moduledoc """
+  Loads and prepares OpenAPI documents for Oasis generation.
 
-  require Logger
+  `read/1` is the public file-ingestion entrypoint used by
+  `mix oas.gen.plug`. It parses YAML or JSON, resolves the structural OpenAPI
+  Reference Objects Oasis consumes, preserves JSON Schema references for
+  JSONSchex, and normalizes path/operation data.
 
-  alias __MODULE__
+  Since the JSONSchex boundary migration, successful reads return an
+  `Oasis.Spec.Document` rather than the `%ExJsonSchema.Schema.Root{}` returned by
+  Oasis 0.6. Callers that only need the normalized generation view may inspect
+  `document.schema`; generation code should retain the complete document so the
+  reference root, source path, pointer sidecars, and URI aliases remain available.
+  Unlike the old eagerly expanded root, Schema Object references remain intact
+  for JSONSchex.
+  """
 
+  alias __MODULE__.{Document, OpenAPIRefResolver}
+
+  @doc """
+  Reads and prepares an OpenAPI YAML or JSON document.
+
+  Returns an `Oasis.Spec.Document` on success. File loading/decoding failures and
+  invalid OpenAPI structures recognized during preparation are returned as
+  `{:error, exception}` tuples.
+  """
+  @spec read(Path.t()) :: Document.t() | {:error, Exception.t()}
   def read(path) do
     path
-    |> extract_path_suffix()
-    |> read_file()
-    |> build_json_schema()
+    |> Document.load()
+    |> build_document()
   end
 
-  defp build_json_schema({:ok, data}) do
-    data
-    |> ExJsonSchema.Schema.resolve()
-    |> Spec.Utils.expand_ref()
-    |> Spec.Path.build()
-  end
-
-  defp build_json_schema({:error, %YamlElixir.FileNotFoundError{message: message}}) do
-    {:error, %Oasis.FileNotFoundError{message: message}}
-  end
-
-  defp build_json_schema({:error, %YamlElixir.ParsingError{message: message}}) do
-    {:error, %Oasis.InvalidSpecError{message: "Failed to parse yaml file: #{message}"}}
-  end
-
-  defp build_json_schema({:error, %Oasis.FileNotFoundError{} = error}) do
-    {:error, error}
-  end
-
-  defp build_json_schema({:error, %Oasis.InvalidSpecError{} = error}) do
-    {:error, error}
-  end
-
-  defp build_json_schema({:error, %Jason.DecodeError{data: data}}) do
-    {:error, %Oasis.InvalidSpecError{message: "Failed to parse json file: `#{data}`"}}
-  end
-
-  defp extract_path_suffix(path) do
-    suffix = path |> String.trim() |> String.slice(-4..-1) |> String.downcase()
-    {suffix, path}
-  end
-
-  defp read_file({type, path}) when type == "yaml" or type == ".yml" do
-    YamlElixir.read_from_file(path)
-  end
-
-  defp read_file({"json", path}) do
-    case File.read(path) do
-      {:ok, content} ->
-        Jason.decode(content)
-
-      {:error, posix} ->
-        {:error,
-         %Oasis.FileNotFoundError{
-           message: "Failed to open file #{inspect(path)} with error #{posix}"
-         }}
+  defp build_document({:ok, {data, opts}}) do
+    try do
+      data
+      |> Document.new(opts)
+      |> OpenAPIRefResolver.resolve()
+      |> Oasis.Spec.Path.build()
+    rescue
+      error in Oasis.InvalidSpecError -> {:error, error}
     end
   end
 
-  defp read_file({invalid_type, _path}) do
-    {:error,
-     %Oasis.InvalidSpecError{
-       message: "Expect a yml/yaml or json format file, but got: `#{invalid_type}`"
-     }}
+  defp build_document({:error, %Oasis.FileNotFoundError{} = error}) do
+    {:error, error}
   end
+
+  defp build_document({:error, %Oasis.InvalidSpecError{} = error}) do
+    {:error, error}
+  end
+
 end

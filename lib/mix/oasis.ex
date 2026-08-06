@@ -1,67 +1,72 @@
 defmodule Mix.Oasis do
-  @moduledoc false
+  @moduledoc """
+  Builds the generation plan consumed by Oasis Mix tasks.
 
-  defimpl Inspect, for: ExJsonSchema.Schema.Root do
-    @default %ExJsonSchema.Schema.Root{}
+  `new/2` prepares an `Oasis.Spec.Document` or decoded OpenAPI map and returns
+  file descriptors. It does not write files itself. Tooling may inspect each
+  descriptor's binding, including `%Mix.Oasis.Router{source_meta: ...}`, before
+  passing the plan to its own writer.
+  """
 
-    def inspect(%module{} = root, opts) do
-      # simplify `ExJsonSchema.Schema.Root` struct to inspect when generate `Oasis.Plug.RequestValidator` plug
-      # with :body_schema, :cookie_schema, :header_schema, :query_schema and :path_schema option(s)
+  alias Oasis.Spec.Document
 
-      pruned = Map.drop(root, [:__struct__, :__exception__])
+  @type generation_file ::
+          {:eex | :new_eex, String.t(), String.t(), module(), term()}
 
-      pruned =
-        Enum.reduce(pruned, pruned, fn {key, value}, acc ->
-          default_value = Map.get(@default, key)
+  @jsonschex_compile_options [format_assertion: true, content_assertion: false]
 
-          if value == default_value do
-            Map.drop(acc, [key])
-          else
-            acc
-          end
-        end)
+  @doc """
+  Prepares an OpenAPI document and returns generated-file descriptors.
 
-      inspect_as_struct(pruned, inspect_atom_2_literal(module), opts)
-    end
+  Accepted inputs are a prepared `Oasis.Spec.Document` or a decoded OpenAPI map
+  containing a Paths Object. Decoded maps are structurally resolved and
+  normalized before generation.
 
-    if Code.ensure_loaded?(Macro) and function_exported?(Macro, :inspect_atom, 2) do
-      # above elixir 1.14
-      defp inspect_atom_2_literal(module), do: Macro.inspect_atom(:literal, module)
-    end
+  Relevant options include `:base_uri`, `:loader`, `:name_space`, and `:router`.
+  Callers passing Oasis's legacy pre-grouped parameter maps must opt in with
+  `normalized_parameters: true`; decoded OpenAPI Parameter Objects use arrays
+  and are validated strictly by default.
 
-    if Code.ensure_loaded?(Code.Identifier) and
-         function_exported?(Code.Identifier, :inspect_as_atom, 1) do
-      # below elixir 1.14
-      defp inspect_atom_2_literal(module), do: Code.Identifier.inspect_as_atom(module)
-    end
+  Each returned tuple contains the write policy, target path, template path,
+  target module, and template binding. The Mix task consumes the same plan.
+  """
+  @spec new(Document.t() | map(), keyword()) :: [generation_file()]
+  def new(
+        %Document{
+          schema: %{"paths" => paths} = spec,
+          reference_schema: reference_schema,
+          source_path: source_path,
+          url_aliases: url_aliases,
+          schema_sources: schema_sources
+        },
+        opts
+      )
+      when is_map(paths) do
+    opts =
+      opts
+      |> Keyword.put_new(:root_spec, reference_schema || spec)
+      |> Keyword.put_new(:base_uri, source_path)
+      |> Keyword.put_new(:url_aliases, url_aliases)
+      |> Keyword.put_new(:schema_sources, schema_sources)
 
-    if Code.ensure_loaded?(Inspect.Map) and function_exported?(Inspect.Map, :inspect, 4) do
-      # above elixir 1.14
-      defp inspect_as_struct(map, struct_module_name, opts) do
-        # struct of `infos` refers to:
-        # https://github.com/elixir-lang/elixir/blob/v1.14/lib/elixir/lib/inspect.ex#L594
-        infos = map |> Map.keys() |> Enum.map(&%{field: &1})
-        Inspect.Map.inspect(map, struct_module_name, infos, opts)
-      end
-    end
-
-    if Code.ensure_loaded?(Inspect.Map) and function_exported?(Inspect.Map, :inspect, 3) do
-      # below elixir 1.14
-      defp inspect_as_struct(map, struct_module_name, opts),
-        do: Inspect.Map.inspect(map, struct_module_name, opts)
-    end
-
-    if Code.ensure_loaded?(Inspect.Map) and function_exported?(Inspect.Map, :inspect_as_struct, 4) do
-      # above elixir 1.18
-      defp inspect_as_struct(map, struct_module_name, opts) do
-        infos = map |> Map.keys() |> Enum.map(&%{field: &1})
-        Inspect.Map.inspect_as_struct(map, struct_module_name, infos, opts)
-      end
-    end
+    Mix.Oasis.Router.generate_files_by_paths_spec(generator_paths(), spec, opts)
   end
 
   def new(%{"paths" => paths} = spec, opts) when is_map(paths) do
-    Mix.Oasis.Router.generate_files_by_paths_spec(generator_paths(), spec, opts)
+    source_path = Document.normalize_base_uri(opts[:base_uri])
+    opts = Keyword.put(opts, :base_uri, source_path)
+    resolver_opts = Keyword.take(opts, [:base_uri, :loader])
+    resolved = Oasis.Spec.OpenAPIRefResolver.resolve(spec, resolver_opts)
+
+    document =
+      resolved
+      |> Document.new(
+        source_path: source_path,
+        allow_normalized_parameters?: Keyword.get(opts, :normalized_parameters, false)
+      )
+      |> Oasis.Spec.Path.build()
+
+    new(document, opts)
   end
 
   def new(spec, _opts) do
@@ -106,7 +111,7 @@ defmodule Mix.Oasis do
 
   def module_alias(%{http_verb: http_verb, url: url}) do
     uri = URI.parse(url)
-    url = uri.path |> String.replace(["/", ":", "."], "-")
+    url = String.replace(uri.path, ["/", ":", "."], "-")
     last_alias = "#{http_verb}#{url}"
     module_alias_and_file_path(last_alias, [], [last_alias])
   end
@@ -187,6 +192,240 @@ defmodule Mix.Oasis do
 
     EEx.eval_string(content, binding)
   end
+
+  @doc """
+  Renders data containing already-compiled JSONSchex schemas into AST-friendly
+  source. Raw maps remain ordinary data regardless of their key names.
+  """
+  def render_embedded_schemas(term) do
+    term
+    |> schema_container_to_ast()
+    |> Macro.to_string()
+  end
+
+  @doc false
+  def render_parameter_schemas(parameters) when is_map(parameters) do
+    parameters
+    |> map_to_ast(&parameter_definition_to_ast/1)
+    |> Macro.to_string()
+  end
+
+  @doc false
+  def render_body_schema(body) when is_map(body) do
+    body
+    |> content_definition_to_ast()
+    |> Macro.to_string()
+  end
+
+  @doc """
+  Prepares a JSON Schema entrypoint for generated code.
+
+  When `:root_spec` and `:entry` are available, JSONSchex bundles the fragment
+  in its containing OpenAPI document context and returns a standalone schema.
+  Otherwise, the schema is treated as already standalone.
+
+  ## Options
+
+  - `:root_spec` — the containing OpenAPI document map. Required together with
+    `:entry` for fragment bundling. Without it, the `schema` is assumed to be
+    self-contained.
+  - `:entry` — JSON Pointer or URI reference identifying the schema fragment to
+    bundle (e.g. `"#/paths/~1users/post/requestBody/content/application~1json/schema"`).
+    Forwarded to `JSONSchex.bundle_fragment/2`.
+  - `:base_uri` — base URI used to resolve relative external refs inside
+    `:root_spec`. Forwarded to `JSONSchex.bundle_fragment/2`.
+  - `:loader` — external-resource loader. Defaults to
+    `&Oasis.Spec.Document.load_external/1`. Pass `loader: nil` to opt out of
+    external loading (any unresolved external `$ref` then raises).
+
+  ## Behavior
+
+  Returns the bundled (or pass-through) JSON Schema map/boolean as data —
+  **not** a compiled `%JSONSchex.Types.Schema{}`. The returned map is suitable
+  for embedding into generated `pre_*.ex` modules via `JSONSchex.Schema.compile!/2`
+  at compile time.
+
+  Raises `ArgumentError` if bundling or the compile precheck fails. Error
+  messages include the entry and base URI for diagnostics.
+  """
+  def prepare_json_schema!(schema, opts \\ []) when is_map(schema) or is_boolean(schema) do
+    schema = bundle_schema_entrypoint(schema, opts)
+
+    # Intentional double-compile: we discard `_compiled` and return the *data*
+    # form so the generated `pre_*.ex` template can re-embed it via
+    # `JSONSchex.Schema.compile!/2` at the call site's compile time.
+    #
+    # The precheck here exists purely to fail fast at `mix oas.gen.plug` time
+    # with a clear `ArgumentError` (carrying entry / base URI context) instead
+    # of letting a malformed bundled schema surface later as a cryptic
+    # macro-expansion error inside the generated module's compilation.
+    #
+    # Do NOT "optimize" this away — the runtime compile is not redundant; it is
+    # the only validation that the bundled fragment actually compiles before we
+    # commit it to disk.
+    _compiled = compile_prepared_json_schema!(schema, opts)
+
+    schema
+  end
+
+  defp bundle_schema_entrypoint(schema, opts) do
+    case {Keyword.get(opts, :root_spec), Keyword.get(opts, :entry)} do
+      {%{} = root_spec, entry} when is_binary(entry) ->
+        bundle_fragment!(root_spec, opts)
+
+      _other ->
+        schema
+    end
+  end
+
+  defp bundle_fragment!(root_spec, opts) do
+    # JSONSchex only invokes the loader when an unresolved external $ref is
+    # actually reached, so passing the default loader unconditionally has no
+    # cost for self-contained schemas. This keeps the failure path simple: one
+    # call, one definitive error, no risk of masking the real diagnostic.
+    #
+    # Callers may override with their own loader via the `:loader` option, or
+    # explicitly disable loading by passing `loader: nil`.
+    loader = Keyword.get(opts, :loader, &Oasis.Spec.Document.load_external/1)
+
+    fragment_opts =
+      opts
+      |> Keyword.take([:entry, :base_uri])
+      |> Keyword.put(:loader, loader)
+
+    case JSONSchex.bundle_fragment(root_spec, fragment_opts) do
+      {:ok, bundled} ->
+        bundled
+
+      {:error, error} ->
+        raise_json_schema_error!(error, opts, "bundle JSON Schema fragment")
+    end
+  end
+
+  defp schema_container_to_ast(%JSONSchex.Types.Schema{} = schema) do
+    Macro.escape(schema)
+  end
+
+  defp schema_container_to_ast(%{} = map) do
+    map_to_ast(map, &schema_container_to_ast/1)
+  end
+
+  defp schema_container_to_ast(list) when is_list(list) do
+    Enum.map(list, &schema_container_to_ast/1)
+  end
+
+  defp schema_container_to_ast(tuple) when is_tuple(tuple) do
+    tuple
+    |> Tuple.to_list()
+    |> Enum.map(&schema_container_to_ast/1)
+    |> List.to_tuple()
+  end
+
+  defp schema_container_to_ast(value) do
+    Macro.escape(value)
+  end
+
+  defp parameter_definition_to_ast(%{"schema" => _schema} = definition) do
+    schema_definition_to_ast(definition)
+  end
+
+  defp parameter_definition_to_ast(%{"content" => content} = definition) when is_map(content) do
+    content_definition_to_ast(definition)
+  end
+
+  defp parameter_definition_to_ast(definition), do: Macro.escape(definition)
+
+  defp schema_definition_to_ast(definition) do
+    map_to_ast(definition, fn
+      %JSONSchex.Types.Schema{} = schema ->
+        Macro.escape(schema)
+
+      schema when is_map(schema) or is_boolean(schema) ->
+        compile_schema_ast(schema, schema_compile_options())
+
+      schema ->
+        raise ArgumentError,
+              "expected direct \"schema\" value to be a map, boolean, or compiled JSONSchex.Types.Schema, got: #{inspect(schema, pretty: true)}"
+    end, only_key: "schema")
+  end
+
+  defp content_definition_to_ast(definition) do
+    map_to_ast(definition, fn content ->
+      map_to_ast(content, fn
+        %{} = media -> schema_definition_or_data_to_ast(media)
+        media -> Macro.escape(media)
+      end)
+    end, only_key: "content")
+  end
+
+  defp schema_definition_or_data_to_ast(%{"schema" => _schema} = media) do
+    schema_definition_to_ast(media)
+  end
+
+  defp schema_definition_or_data_to_ast(media), do: Macro.escape(media)
+
+  defp map_to_ast(map, value_to_ast, opts \\ []) do
+    only_key = Keyword.get(opts, :only_key)
+
+    entries =
+      map
+      |> Enum.sort_by(&entry_sort_key/1)
+      |> Enum.map(fn {key, value} ->
+        value_ast =
+          if only_key == nil or key == only_key do
+            value_to_ast.(value)
+          else
+            # Once a known schema-bearing OpenAPI object is identified, all of
+            # its other fields are metadata and must remain ordinary data.
+            Macro.escape(value)
+          end
+
+        {Macro.escape(key), value_ast}
+      end)
+
+    {:%{}, [], entries}
+  end
+
+  defp compile_schema_ast(schema, opts) do
+    quote do
+      JSONSchex.Schema.compile!(
+        unquote(Macro.escape(schema)),
+        unquote(Macro.escape(opts))
+      )
+    end
+  end
+
+  defp compile_prepared_json_schema!(schema, opts) when is_map(schema) or is_boolean(schema) do
+    case JSONSchex.compile(schema, schema_compile_options()) do
+      {:ok, compiled} ->
+        compiled
+
+      {:error, error} ->
+        raise_json_schema_error!(error, opts, "compile prepared JSON Schema")
+    end
+  end
+
+  defp raise_json_schema_error!(error, opts, phase) do
+    details =
+      [
+        "Failed to #{phase}: #{JSONSchex.format_error(error)}",
+        error_context_detail("entry", opts[:entry]),
+        error_context_detail("base_uri", opts[:base_uri])
+      ]
+      |> Enum.reject(&is_nil/1)
+      |> Enum.join("; ")
+
+    raise ArgumentError, details
+  end
+
+  defp error_context_detail(_label, nil), do: nil
+  defp error_context_detail(label, value), do: "#{label}=#{value}"
+
+  defp schema_compile_options do
+    @jsonschex_compile_options
+  end
+
+  defp entry_sort_key({key, _value}), do: :erlang.term_to_binary(key)
 
   defp to_app_source(path, source_dir) when is_binary(path),
     do: Path.join(path, source_dir)

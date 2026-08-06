@@ -1,5 +1,60 @@
 defmodule Mix.Oasis.Router do
-  @moduledoc false
+  @moduledoc """
+  Generation-time descriptor of a single Plug route built from an OpenAPI
+  operation.
+
+  Most fields drive the generated `pre_*.ex` / `*.ex` files and the umbrella
+  `router.ex` file. The `:source_meta` field is **public** and stable: it carries
+  the logical OpenAPI source identity for every schema fragment Oasis extracted
+  from the operation. Paths retain the user's OpenAPI URL spelling; parameter
+  names use Oasis's runtime identity (notably, header names are lowercase). It is
+  intended for tooling that consumes generation output and for the mix task's
+  own diagnostics.
+
+  Generated runtime modules deliberately do **not** embed `:source_meta`. Runtime
+  validation errors carry enough route/parameter context via `Plug.Conn` plus
+  `Oasis.BadRequestError` fields for callers to identify the failing input.
+
+  ## `:source_meta` shape
+
+      %{
+        path_schema:   %{parameter_name => parameter_meta()},
+        query_schema:  %{parameter_name => parameter_meta()},
+        header_schema: %{parameter_name => parameter_meta()},
+        cookie_schema: %{parameter_name => parameter_meta()},
+        body_schema:   %{content_type   => body_meta()}
+      }
+
+  where `parameter_meta()` is:
+
+      %{
+        path: String.t(),                # OpenAPI URL, e.g. "/users/{id}"
+        http_verb: String.t(),           # "get" | "post" | ...
+        parameter_location: String.t(),  # "path" | "query" | "header" | "cookie"
+        parameter_name: String.t()
+      }
+
+  OpenAPI parameters are uniquely identified by `(in, name)` within an
+  operation, which is already captured by `parameter_location` and
+  `parameter_name`. This is a logical operation/input identity: when an OpenAPI
+  Reference Object points to an external target, the metadata still identifies
+  the referencing operation and input and may not identify the exact raw target
+  object in the external document. No array index is exposed: it would be brittle
+  (sensitive to reordering) and would need to disambiguate path-item-level
+  vs operation-level parameters. Tooling that needs a JSON Pointer into the
+  raw document can build one from `path` + `http_verb` (and, if needed,
+  scan the operation's `parameters` array for a matching `(in, name)`). Header
+  names must be compared case-insensitively because `parameter_name` is the
+  lowercase runtime identity.
+
+  and `body_meta()` is:
+
+      %{
+        path: String.t(),
+        http_verb: String.t(),
+        content_type: String.t()
+      }
+  """
 
   defstruct [
     :http_verb,
@@ -15,7 +70,9 @@ defmodule Mix.Oasis.Router do
     :plug_module,
     :request_validator,
     :plug_parsers,
-    :security
+    :security,
+    schema_compile_required?: false,
+    source_meta: %{}
   ]
 
   @check_parameter_fields [
@@ -107,10 +164,17 @@ defmodule Mix.Oasis.Router do
 
     routers = Enum.sort(routers, &(&1.url < &2.url))
 
-    {:eex, target, "router.ex", Module.concat([name_space, module_name]), %{routers: routers}}
+    {:eex, target, "router.ex.eex", Module.concat([name_space, module_name]), %{routers: routers}}
   end
 
   defp new(apps, url, http_verb, operation, opts) do
+    source_url = source_url(opts, url)
+
+    opts =
+      opts
+      |> Keyword.put(:formatted_url, url)
+      |> Keyword.put(:operation_pointer_path, ["paths", source_url, http_verb])
+
     router =
       Map.merge(
         %__MODULE__{
@@ -125,58 +189,69 @@ defmodule Mix.Oasis.Router do
 
   defp build_operation(operation, opts) do
     operation
-    |> merge_parameters_to_operation()
-    |> merge_request_body_to_operation()
+    |> merge_parameters_to_operation(opts)
+    |> merge_request_body_to_operation(opts)
     |> merge_security_to_operation(opts)
     |> merge_others_to_operation(opts)
   end
 
-  defp merge_parameters_to_operation(%{"parameters" => parameters} = operation) do
-    router =
+  defp merge_parameters_to_operation(%{"parameters" => parameters} = operation, opts) do
+    {router, source_meta} =
       @check_parameter_fields
-      |> Enum.reduce(%{}, fn location, acc ->
+      |> Enum.reduce({%{schema_compile_required?: false}, %{}}, fn location, {router_acc, source_meta_acc} ->
         parameters_to_location = Map.get(parameters, location)
 
-        params_to_schema = group_schemas_by_location(location, parameters_to_location)
+        {params_to_schema, params_to_meta} =
+          group_schemas_by_location(location, parameters_to_location, opts)
 
-        to_schema_opt(params_to_schema, location, acc)
+        router_acc = to_schema_opt(params_to_schema, location, router_acc)
+        source_meta_acc = to_source_meta_opt(params_to_meta, location, source_meta_acc)
+
+        {router_acc, source_meta_acc}
       end)
+
+    router = Map.put(router, :source_meta, source_meta)
 
     {router, operation}
   end
 
-  defp merge_parameters_to_operation(operation), do: {%{}, operation}
+  defp merge_parameters_to_operation(operation, _opts), do: {%{}, operation}
 
   defp merge_request_body_to_operation(
-         {acc, %{"requestBody" => %{"content" => content} = request_body} = operation}
+         {router, %{"requestBody" => %{"content" => content} = request_body} = operation},
+         opts
        )
        when is_map(content) do
-    content =
-      Enum.reduce(content, %{}, fn {content_type, media}, acc ->
+    {content, body_source_meta} =
+      Enum.reduce(content, {%{}, %{}}, fn {content_type, media}, {content_acc, meta_acc} ->
         schema = Map.get(media, "schema")
 
         if schema != nil do
-          media = Map.put(media, "schema", %ExJsonSchema.Schema.Root{schema: schema})
-          Map.put(acc, content_type, media)
+          entry = entry(opts, ["requestBody", "content", content_type, "schema"])
+          source_meta = body_source_meta(opts, content_type)
+
+          media = Map.put(media, "schema", Mix.Oasis.prepare_json_schema!(schema, schema_opts(opts, entry)))
+          {Map.put(content_acc, content_type, media), Map.put(meta_acc, content_type, source_meta)}
         else
-          acc
+          {content_acc, meta_acc}
         end
       end)
 
     if content == %{} do
       # skip if no "schema" defined in Media Type Object.
-      {acc, operation}
+      {router, operation}
     else
-      body_schema = put_required_if_exists(request_body, %{"content" => content})
+      router =
+        router
+        |> Map.put(:body_schema, put_required_if_exists(request_body, %{"content" => content}))
+        |> Map.put(:schema_compile_required?, true)
+        |> update_in([Access.key(:source_meta, %{})], &Map.put(&1, :body_schema, body_source_meta))
 
-      {
-        Map.put(acc, :body_schema, body_schema),
-        operation
-      }
+      {router, operation}
     end
   end
 
-  defp merge_request_body_to_operation({acc, operation}), do: {acc, operation}
+  defp merge_request_body_to_operation({router, operation}, _opts), do: {router, operation}
 
   defp put_required_if_exists(%{"required" => required}, map)
        when is_boolean(required) and is_map(map) do
@@ -185,23 +260,75 @@ defmodule Mix.Oasis.Router do
 
   defp put_required_if_exists(_, map), do: map
 
-  defp group_schemas_by_location(location, parameters)
+  defp group_schemas_by_location(location, parameters, opts)
        when location in @check_parameter_fields and is_list(parameters) do
-    Enum.reduce(parameters, %{}, fn param, acc ->
-      map_parameter(param, acc)
+    parameters
+    |> Enum.with_index()
+    |> Enum.reduce({%{}, %{}}, fn {param, index}, acc ->
+      map_parameter(param, location, index, acc, opts)
     end)
   end
 
-  defp group_schemas_by_location(_location, _parameters), do: nil
+  defp group_schemas_by_location(_location, _parameters, _opts), do: {nil, nil}
 
-  defp map_parameter(%{"name" => name, "schema" => schema} = parameter, acc) do
-    parameter =
-      put_required_if_exists(parameter, %{"schema" => %ExJsonSchema.Schema.Root{schema: schema}})
+  defp map_parameter(
+         %{"name" => name, "schema" => schema} = parameter,
+         location,
+         index,
+         {schemas_acc, meta_acc},
+         opts
+       ) do
+    entry = parameter_entry(opts, location, name, index, ["schema"])
 
-    Map.merge(acc, %{name => parameter})
+    parameter_value =
+      put_required_if_exists(parameter, %{
+        "schema" => Mix.Oasis.prepare_json_schema!(schema, schema_opts(opts, entry))
+      })
+
+    source_meta = parameter_source_meta(opts, location, name)
+
+    {
+      Map.put(schemas_acc, name, parameter_value),
+      Map.put(meta_acc, name, source_meta)
+    }
   end
 
-  defp map_parameter(_, acc), do: acc
+  defp map_parameter(
+         %{"name" => name, "content" => content} = parameter,
+         location,
+         index,
+         {schemas_acc, meta_acc},
+         opts
+       )
+       when is_map(content) do
+    prepared_content =
+      Enum.reduce(content, %{}, fn {content_type, media}, acc ->
+        case media do
+          %{"schema" => schema} ->
+            entry =
+              parameter_entry(opts, location, name, index, ["content", content_type, "schema"])
+            prepared_schema = Mix.Oasis.prepare_json_schema!(schema, schema_opts(opts, entry))
+            Map.put(acc, content_type, Map.put(media, "schema", prepared_schema))
+
+          _other ->
+            acc
+        end
+      end)
+
+    if prepared_content == %{} do
+      {schemas_acc, meta_acc}
+    else
+      parameter_value = put_required_if_exists(parameter, %{"content" => prepared_content})
+      source_meta = parameter_source_meta(opts, location, name)
+
+      {
+        Map.put(schemas_acc, name, parameter_value),
+        Map.put(meta_acc, name, source_meta)
+      }
+    end
+  end
+
+  defp map_parameter(_, _location, _index, acc, _opts), do: acc
 
   defp to_schema_opt(nil, _, acc), do: acc
 
@@ -209,23 +336,86 @@ defmodule Mix.Oasis.Router do
     acc
   end
 
-  defp to_schema_opt(params, "query", acc) do
-    Map.put(acc, :query_schema, params)
+  defp to_schema_opt(params, "query", acc),
+    do: acc |> Map.put(:query_schema, params) |> put_schema_compile_required_if_not_marked()
+  defp to_schema_opt(params, "cookie", acc),
+    do: acc |> Map.put(:cookie_schema, params) |> put_schema_compile_required_if_not_marked()
+  defp to_schema_opt(params, "header", acc),
+    do: acc |> Map.put(:header_schema, params) |> put_schema_compile_required_if_not_marked()
+  defp to_schema_opt(params, "path", acc),
+    do: acc |> Map.put(:path_schema, params) |> put_schema_compile_required_if_not_marked()
+
+  defp put_schema_compile_required_if_not_marked(%{schema_compile_required?: true} = acc), do: acc
+  defp put_schema_compile_required_if_not_marked(acc), do: Map.put(acc, :schema_compile_required?, true)
+
+  defp to_source_meta_opt(nil, _, acc), do: acc
+  defp to_source_meta_opt(meta, _, acc) when meta == %{}, do: acc
+  defp to_source_meta_opt(meta, "query", acc), do: Map.put(acc, :query_schema, meta)
+  defp to_source_meta_opt(meta, "cookie", acc), do: Map.put(acc, :cookie_schema, meta)
+  defp to_source_meta_opt(meta, "header", acc), do: Map.put(acc, :header_schema, meta)
+  defp to_source_meta_opt(meta, "path", acc), do: Map.put(acc, :path_schema, meta)
+
+  defp schema_opts(opts, entry) do
+    opts
+    |> Keyword.take([:root_spec, :base_uri, :loader])
+    |> Keyword.put(:entry, entry)
   end
 
-  defp to_schema_opt(params, "cookie", acc) do
-    Map.put(acc, :cookie_schema, params)
+  # Generation-time source metadata for a request body schema.
+  defp body_source_meta(opts, content_type) do
+    [_, formatted_url, http_verb] = Keyword.fetch!(opts, :operation_pointer_path)
+    source_url = source_url(opts, formatted_url)
+
+    %{
+      path: source_url,
+      http_verb: http_verb,
+      content_type: content_type
+    }
   end
 
-  defp to_schema_opt(params, "header", acc) do
-    Map.put(acc, :header_schema, params)
+  defp parameter_source_meta(opts, location, name) do
+    [_, formatted_url, http_verb] = Keyword.fetch!(opts, :operation_pointer_path)
+    source_url = source_url(opts, formatted_url)
+
+    %{
+      path: source_url,
+      http_verb: http_verb,
+      parameter_location: location,
+      parameter_name: name
+    }
   end
 
-  defp to_schema_opt(params, "path", acc) do
-    Map.put(acc, :path_schema, params)
+  defp source_url(opts, formatted_url) do
+    opts
+    |> Keyword.get(:url_aliases, %{})
+    |> Map.get(formatted_url, formatted_url)
   end
 
-  defp merge_security_to_operation({acc, operation}, opts) do
+  defp entry(opts, relative_path) do
+    opts
+    |> Keyword.fetch!(:operation_pointer_path)
+    |> Kernel.++(relative_path)
+    |> pointer_from_path()
+  end
+
+  defp parameter_entry(opts, location, name, index, relative_path) do
+    ["paths", _source_url, http_verb] = operation_path = Keyword.fetch!(opts, :operation_pointer_path)
+    formatted_url = Keyword.fetch!(opts, :formatted_url)
+    source_key = {:parameter, formatted_url, http_verb, location, name}
+
+    source_path =
+      opts
+      |> Keyword.get(:schema_sources, %{})
+      |> Map.get(source_key, operation_path ++ ["parameters", location, index])
+
+    pointer_from_path(source_path ++ relative_path)
+  end
+
+  defp pointer_from_path(path) do
+    ExJSONPointer.encode_path(path, format: "uri_fragment")
+  end
+
+  defp merge_security_to_operation({router, operation}, opts) do
     {global_security, security_schemes} = opts[:global_security]
     security =
       case Oasis.Spec.Security.build(operation, security_schemes) do
@@ -234,17 +424,17 @@ defmodule Mix.Oasis.Router do
       end
 
     {
-      Map.put(acc, :security, security),
+      Map.put(router, :security, security),
       operation
     }
   end
 
-  defp merge_others_to_operation({acc, operation}, opts) do
+  defp merge_others_to_operation({router, operation}, opts) do
     # Use the input `name_space` option from command line if existed
     name_space_from_spec = Map.get(operation, @spec_ext_name_space)
     name_space = opts[:name_space] || name_space_from_spec
 
-    acc
+    router
     |> Map.put(:operation_id, Map.get(operation, "operationId"))
     |> Map.put(:name_space, name_space)
   end
@@ -281,51 +471,38 @@ defmodule Mix.Oasis.Router do
   defp may_inject_plug_parsers(router), do: router
 
   defp inject_plug_parsers(content) do
-    opts = [
-      parsers: MapSet.new(),
+    init_map = %{
+      parsers: [],
       pass: ["*/*"],
       body_reader: {Oasis.CacheRawBodyReader, :read_body, []}
-    ]
+    }
 
-    opts =
-      Enum.reduce(content, opts, fn {content_type, _}, opts ->
-        map_plug_parsers(content_type, opts)
+    map =
+      Enum.reduce(content, init_map, fn {content_type, _}, acc ->
+        update_in_plug_parsers(content_type, acc)
       end)
 
-    parsers = MapSet.to_list(opts[:parsers])
-
-    if parsers == [] do
+    if Enum.empty?(map.parsers) do
       nil
     else
-      opts = Keyword.put(opts, :parsers, parsers)
+      opts =
+        map
+        |> update_in([:parsers], &(&1 |> MapSet.new() |> MapSet.to_list()))
+        |> Map.to_list()
       ~s|plug(\nPlug.Parsers, #{inspect(opts)})|
     end
   end
 
-  defp map_plug_parsers("application/x-www-form-urlencoded" <> _, acc) do
-    parsers = MapSet.put(acc[:parsers], :urlencoded)
-    Keyword.put(acc, :parsers, parsers)
+  defp update_in_plug_parsers(content_type, map) do
+    parsers = Oasis.MediaType.parsers(content_type)
+    map = update_in(map[:parsers], &(parsers ++ &1))
+
+    if :json in parsers do
+      Map.put(map, :json_decoder, Jason)
+    else
+      map
+    end
   end
-
-  defp map_plug_parsers("multipart/form-data" <> _, acc) do
-    parsers = MapSet.put(acc[:parsers], :multipart)
-    Keyword.put(acc, :parsers, parsers)
-  end
-
-  defp map_plug_parsers("multipart/mixed" <> _, acc) do
-    parsers = MapSet.put(acc[:parsers], :multipart)
-    Keyword.put(acc, :parsers, parsers)
-  end
-
-  defp map_plug_parsers("application/json" <> _, acc) do
-    parsers = MapSet.put(acc[:parsers], :json)
-
-    acc
-    |> Keyword.put(:parsers, parsers)
-    |> Keyword.put(:json_decoder, Jason)
-  end
-
-  defp map_plug_parsers(_, acc), do: acc
 
   defp may_inject_request_validator(apps, %{body_schema: body_schema} = router)
        when is_map(body_schema) do
@@ -351,7 +528,7 @@ defmodule Mix.Oasis.Router do
 
   defp inject_request_validator(apps, router) do
     content =
-      Mix.Oasis.eval_from(apps, "priv/templates/oas.gen.plug/plug/request_validator.exs",
+      Mix.Oasis.eval_from(apps, "priv/templates/oas.gen.plug/plug/request_validator.exs.eex",
         router: router
       )
 
@@ -388,14 +565,14 @@ defmodule Mix.Oasis.Router do
     key_to_assigns = Map.get(security_scheme, @spec_ext_key_to_assigns)
 
     content =
-      Mix.Oasis.eval_from(apps, "priv/templates/oas.gen.plug/plug/bearer_auth.exs",
+      Mix.Oasis.eval_from(apps, "priv/templates/oas.gen.plug/plug/bearer_auth.exs.eex",
         security: security_module,
         key_to_assigns: key_to_assigns
       )
 
     {
       content,
-      {:new_eex, Path.join(dir, file_name), "bearer_token.ex", security_module}
+      {:new_eex, Path.join(dir, file_name), "bearer_token.ex.eex", security_module}
     }
   end
 
@@ -413,7 +590,7 @@ defmodule Mix.Oasis.Router do
     signed_headers = Map.get(security_scheme, @spec_ext_signed_headers)
 
     content =
-      Mix.Oasis.eval_from(apps, "priv/templates/oas.gen.plug/plug/hmac_auth.exs",
+      Mix.Oasis.eval_from(apps, "priv/templates/oas.gen.plug/plug/hmac_auth.exs.eex",
         algorithm: String.to_atom(algorithm),
         security: security_module,
         signed_headers: signed_headers
@@ -421,7 +598,7 @@ defmodule Mix.Oasis.Router do
 
     {
       content,
-      {:new_eex, Path.join(dir, file_name), "hmac_token.ex", security_module}
+      {:new_eex, Path.join(dir, file_name), "hmac_token.ex.eex", security_module}
     }
   end
 
@@ -440,8 +617,8 @@ defmodule Mix.Oasis.Router do
 
     {
       [
-        {:eex, Path.join([dir, pre_plug_file_name]), "pre_plug.ex", pre_plug_module},
-        {:new_eex, Path.join([dir, plug_file_name]), "plug.ex", plug_module}
+        {:eex, Path.join([dir, pre_plug_file_name]), "pre_plug.ex.eex", pre_plug_module},
+        {:new_eex, Path.join([dir, plug_file_name]), "plug.ex.eex", plug_module}
       ],
       router
     }

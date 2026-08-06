@@ -55,7 +55,7 @@ Example:
     String-to-Sign =
         "POST" + "\n" +
         "/new?version=1" + "\n" +
-        "2021-11-24 06:43:20.393420Z;foo.bar.host;{\"name\":\"test\",\"type\":1}"
+        "2021-11-24T06:43:20.393420Z;foo.bar.host;{\"name\":\"test\",\"type\":1}"
 
 Let's take this pair of access key for example:
 
@@ -68,8 +68,8 @@ Notice: the value of the access key secret should be only the client and server 
 The corresponding HTTP headers of the request are:
 
     Host: foo.bar.host
-    Date: 2021-11-24 06:43:20.393420Z
-    Authorization: HMAC-SHA256 Credential=mykey_abc&SignedHeaders=date;host;body&Signature=oSBomxpJWcwlhVkif5LV80zecDLpts9Z13+cth1NKV4=
+    x-oasis-date: 2021-11-24T06:43:20.393420Z
+    Authorization: HMAC-SHA256 Credential=mykey_abc&SignedHeaders=x-oasis-date;host;body&Signature=oSBomxpJWcwlhVkif5LV80zecDLpts9Z13+cth1NKV4=
     Body: "{\"name\":\"test\",\"type\":1}"
 
 Refer the best practices, please try to keep the dynamic part of request into the signature.
@@ -148,6 +148,7 @@ defmodule Oasis.Gen.PrePostTestHMAC do
   # run `mix oas.gen.plug` task command with the OpenAPI Specification file.
   use Oasis.Controller
   use Plug.ErrorHandler
+  require JSONSchex.Schema
 
   plug(
     Plug.Parsers,
@@ -162,9 +163,11 @@ defmodule Oasis.Gen.PrePostTestHMAC do
     body_schema: %{
       "content" => %{
         "application/json" => %{
-          "schema" => %ExJsonSchema.Schema.Root{
-            schema: %{"properties" => %{"a" => %{"type" => "string"}}, "type" => "object"}
-          }
+          "schema" =>
+            JSONSchex.Schema.compile!(%{
+              "properties" => %{"a" => %{"type" => "string"}},
+              "type" => "object"
+            })
         }
       }
     }
@@ -239,6 +242,7 @@ defmodule Oasis.Gen.HMACAuth do
          {:ok, _} <- verify_date(conn, token, opts),
          {:ok, _} <- verify_body(conn, token, opts) do
       {:ok, token}
+    end
   end
   
   defp verify_date(conn, token, _opts) do
@@ -248,7 +252,7 @@ defmodule Oasis.Gen.HMACAuth do
       if abs(timestamp_now - timestamp) < @max_diff do
         {:ok, timestamp}
       else
-        {:error, :expired}
+        {:error, "expired"}
       end
     end
   end
@@ -263,7 +267,7 @@ defmodule Oasis.Gen.HMACAuth do
     if body_hmac == body_hmac_header do
       {:ok, token}
     else
-      {:error, :invalid_token}
+      {:error, "invalid_token"}
     end
   end
 
@@ -277,13 +281,12 @@ defmodule Oasis.Gen.HMACAuth do
   end
   
   defp parse_header_date(str) when is_binary(str) do
-    with {:ok, datetime} <- Timex.parse(str, "%a, %d %b %Y %H:%M:%S GMT", :strftime),
-         timestamp when is_integer(timestamp) <- Timex.to_unix(datetime) do
-      {:ok, timestamp}
+    with {:ok, datetime, 0} <- DateTime.from_iso8601(str) do
+      {:ok, DateTime.to_unix(datetime)}
     end
   end
 
-  defp parse_header_date(_otherwise), do: {:error, :expired}
+  defp parse_header_date(_otherwise), do: {:error, "expired"}
 
   defp hmac(subtype, secret, content) do
     Base.encode64(:crypto.mac(:hmac, subtype, secret, content))

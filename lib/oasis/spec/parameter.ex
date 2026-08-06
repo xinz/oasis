@@ -22,9 +22,9 @@ defmodule Oasis.Spec.Parameter do
     parameter
   end
 
-  defp check_schema_or_content(parameter, nil, content) when content != nil do
+  defp check_schema_or_content(parameter, nil, content) when is_map(content) and map_size(content) == 1 do
     Enum.each(content, fn {content_type, media_type} ->
-      if media_type["schema"] == nil do
+      if not is_map(media_type) or media_type["schema"] == nil do
         raise InvalidSpecError,
               "Not found required schema field in media type object #{inspect(content_type)}: #{
                 inspect(media_type, pretty: true)
@@ -33,6 +33,13 @@ defmodule Oasis.Spec.Parameter do
     end)
 
     parameter
+  end
+
+  defp check_schema_or_content(parameter, nil, content) when content != nil do
+    raise InvalidSpecError,
+          "A Parameter Object content map MUST contain exactly one media type entry, got: #{
+            inspect(content, pretty: true)
+          } in #{inspect(parameter, pretty: true)}"
   end
 
   defp check_schema_or_content(parameter, _schema, _content) do

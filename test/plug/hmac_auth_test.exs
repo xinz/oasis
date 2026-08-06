@@ -15,7 +15,7 @@ defmodule Oasis.Plug.HMACAuthTest do
           "HMAC-SHA256 Credential1=credential&SignedHeaders=signed_headers&Signature=signature"
         )
 
-      assert {:error, _} = parse_hmac_auth(conn, "hmac-sha256")
+      assert {:error, "header_mismatch"} = parse_hmac_auth(conn, "hmac-sha256")
     end
 
     test "parse fail with wrong scheme" do
@@ -26,7 +26,7 @@ defmodule Oasis.Plug.HMACAuthTest do
           "HMAC-SHA Credential=credential&SignedHeaders=signed_headers&Signature=signature"
         )
 
-      assert {:error, _} = parse_hmac_auth(conn, "hmac-sha256")
+      assert {:error, "header_mismatch"} = parse_hmac_auth(conn, "hmac-sha256")
     end
 
     test "parse success" do
@@ -323,6 +323,27 @@ defmodule Oasis.Plug.HMACAuthTest do
                        signed_headers: c.signed_headers
                      )
                    end
+    end
+
+    test "handles the invalid_token string status from custom callbacks" do
+      c = case_host_only()
+
+      conn =
+        conn(:get, c.path_and_query)
+        |> put_req_header(
+          "authorization",
+          "HMAC-SHA256 Credential=#{c.credential}&SignedHeaders=#{c.signed_headers}&Signature=#{c.signature_sha256}"
+        )
+
+      conn = %{conn | host: c.host}
+
+      assert_raise Oasis.BadRequestError, ~r|the HMAC token is invalid|, fn ->
+        hmac_auth(conn,
+          algorithm: :sha256,
+          security: Oasis.Test.Support.HMAC.TokenVerifyInvalid,
+          signed_headers: c.signed_headers
+        )
+      end
     end
 
     test "verify user return unknown error" do

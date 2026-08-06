@@ -1,18 +1,20 @@
 defmodule Oasis.Gen.Plug.PreTestHeader do
+  # NOTICE: Please DO NOT write any business code in this module, since it will always be overridden when
+  # run `mix oas.gen.plug` task command with the OpenAPI Specification file.
   use Oasis.Controller
   use Plug.ErrorHandler
+  require JSONSchex.Schema
 
-  # Notice:
-  # all header name are downcased when generate `pre-*` handler module
-
-  plug(
-    Oasis.Plug.RequestValidator,
+  plug(Oasis.Plug.RequestValidator,
     header_schema: %{
       "items" => %{
         "required" => true,
-        "schema" => %ExJsonSchema.Schema.Root{
-          schema: %{"items" => %{"type" => "integer"}, "type" => "array"}
-        }
+        "schema" =>
+          JSONSchex.Schema.compile!(
+            %{"items" => %{"type" => "integer"}, "type" => "array"},
+            format_assertion: true,
+            content_assertion: false
+          )
       }
     }
   )
@@ -22,5 +24,4 @@ defmodule Oasis.Gen.Plug.PreTestHeader do
   end
 
   defdelegate handle_errors(conn, error), to: Oasis.Gen.Plug.TestHeader
-
 end

@@ -3,7 +3,7 @@ defmodule Oasis.Spec.PathTest do
 
   import Oasis.Test.Support.Spec
 
-  alias Oasis.Spec.{Path, Utils}
+  alias Oasis.Spec.{OpenAPIRefResolver, Path}
 
   test "format url" do
     url = "/{a}"
@@ -85,7 +85,7 @@ defmodule Oasis.Spec.PathTest do
     root =
       yaml_str
       |> yaml_to_json_schema()
-      |> Utils.expand_ref()
+      |> OpenAPIRefResolver.resolve()
       |> Path.build()
 
     # the returned parameters by `name` property in asc order
@@ -105,11 +105,101 @@ defmodule Oasis.Spec.PathTest do
     assert p1["required"] == false
     param_content_schema = p1["content"]["application/json"]["schema"]
 
-    assert param_content_schema["type"] == "object"
+    assert param_content_schema == %{"$ref" => "#/components/schemas/Content"}
 
-    properties = param_content_schema["properties"]
-    assert properties["name"] == %{"type" => "string"}
-    assert properties["tag"] == %{"type" => "integer"}
+    {:ok, bundled} =
+      JSONSchex.bundle_fragment(root.reference_schema,
+        entry: "#/paths/~1page/get/parameters/0/content/application~1json/schema"
+      )
+
+    assert {:ok, compiled} =
+             JSONSchex.compile(bundled,
+               format_assertion: true,
+               content_assertion: false
+             )
+
+    assert JSONSchex.validate(compiled, %{"name" => "hello", "tag" => 1}) == :ok
+    assert {:error, _} = JSONSchex.validate(compiled, %{"name" => "hello", "tag" => "bad"})
+  end
+
+  test "build/1 is idempotent and preserves source sidecars" do
+    raw = %{
+      "paths" => %{
+        "/users/{id}" => %{
+          "get" => %{
+            "operationId" => "getUser",
+            "parameters" => [
+              %{
+                "name" => "id",
+                "in" => "path",
+                "required" => true,
+                "schema" => %{"type" => "integer"}
+              }
+            ]
+          }
+        }
+      }
+    }
+
+    once = Path.build(raw)
+    source_key = {:parameter, "/users/:id", "get", "path", "id"}
+
+    assert once.reference_schema == raw
+    assert once.url_aliases == %{"/users/:id" => "/users/{id}"}
+
+    assert once.schema_sources == %{
+             source_key => ["paths", "/users/{id}", "get", "parameters", 0]
+           }
+
+    assert Path.build(once) == once
+  end
+
+  test "build/1 merges source sidecars and replaces stale entries for rebuilt paths" do
+    raw = %{
+      "paths" => %{
+        "/users/:id" => %{"get" => %{"operationId" => "existingAlias"}},
+        "/posts/{id}" => %{
+          "get" => %{
+            "operationId" => "rebuiltAlias",
+            "parameters" => [
+              %{
+                "name" => "id",
+                "in" => "path",
+                "required" => true,
+                "schema" => %{"type" => "integer"}
+              }
+            ]
+          }
+        }
+      }
+    }
+
+    source_key = {:parameter, "/posts/:id", "get", "path", "id"}
+    legacy_source_key = {:parameter, "/legacy/:id", "get", "path", "id"}
+
+    document =
+      Oasis.Spec.Document.new(raw,
+        url_aliases: %{
+          "/users/:id" => "/users/{id}",
+          "/posts/:id" => "/stale/{id}",
+          "/legacy/:id" => "/legacy/{id}"
+        },
+        schema_sources: %{
+          source_key => ["stale"],
+          legacy_source_key => ["legacy"]
+        }
+      )
+
+    built = Path.build(document)
+
+    assert built.url_aliases["/users/:id"] == "/users/{id}"
+    assert built.url_aliases["/posts/:id"] == "/posts/{id}"
+    assert built.url_aliases["/legacy/:id"] == "/legacy/{id}"
+
+    assert built.schema_sources[source_key] ==
+             ["paths", "/posts/{id}", "get", "parameters", 0]
+
+    assert built.schema_sources[legacy_source_key] == ["legacy"]
   end
 
   test "parameter object with content and schema property" do
@@ -143,6 +233,32 @@ defmodule Oasis.Spec.PathTest do
 
     assert_raise Oasis.InvalidSpecError, ~r/found both/, fn ->
       Path.build(root)
+    end
+  end
+
+  test "Parameter Object content contains exactly one media type" do
+    for content <- [
+          %{},
+          %{
+            "application/json" => %{"schema" => %{"type" => "object"}},
+            "text/plain" => %{"schema" => %{"type" => "string"}}
+          }
+        ] do
+      root = %{
+        "paths" => %{
+          "/content" => %{
+            "get" => %{
+              "parameters" => [
+                %{"name" => "filter", "in" => "query", "content" => content}
+              ]
+            }
+          }
+        }
+      }
+
+      assert_raise Oasis.InvalidSpecError, ~r/MUST contain exactly one media type entry/, fn ->
+        Path.build(root)
+      end
     end
   end
 
@@ -390,6 +506,99 @@ defmodule Oasis.Spec.PathTest do
                  end
   end
 
+  test "rejects malformed Paths and Path Item Objects with InvalidSpecError" do
+    assert_raise Oasis.InvalidSpecError, ~r/OpenAPI Paths Object must be an object/, fn ->
+      Path.build(%{"paths" => []})
+    end
+
+    assert_raise Oasis.InvalidSpecError, ~r/Path Item Object at `\/hello` must be an object/, fn ->
+      Path.build(%{"paths" => %{"/hello" => 42}})
+    end
+  end
+
+  test "rejects non-array Parameter Object collections" do
+    assert_raise Oasis.InvalidSpecError, ~r/Path Item parameters.*must be an array/, fn ->
+      Path.build(%{
+        "paths" => %{
+          "/hello" => %{
+            "parameters" => %{"bad" => true},
+            "get" => %{"operationId" => "hello"}
+          }
+        }
+      })
+    end
+
+    assert_raise Oasis.InvalidSpecError, ~r/Operation `get` parameters.*must be an array/, fn ->
+      Path.build(%{
+        "paths" => %{
+          "/hello" => %{
+            "get" => %{"operationId" => "hello", "parameters" => %{"bad" => true}}
+          }
+        }
+      })
+    end
+  end
+
+  test "normalized parameter compatibility still rejects malformed grouped maps" do
+    for parameters <- [
+          %{"body" => []},
+          %{"query" => %{}},
+          %{"query" => [42]}
+        ] do
+      document =
+        Oasis.Spec.Document.new(
+          %{
+            "paths" => %{
+              "/items" => %{
+                "get" => %{"operationId" => "items", "parameters" => parameters}
+              }
+            }
+          },
+          allow_normalized_parameters?: true
+        )
+
+      assert_raise Oasis.InvalidSpecError,
+                   ~r/Operation `get` parameters.*must be an array or normalized location map/,
+                   fn -> Path.build(document) end
+    end
+  end
+
+  test "normalized operation parameters remain incompatible with path-level parameters" do
+    document =
+      Oasis.Spec.Document.new(
+        %{
+          "paths" => %{
+            "/items" => %{
+              "parameters" => [
+                %{"name" => "locale", "in" => "query", "schema" => %{"type" => "string"}}
+              ],
+              "get" => %{
+                "operationId" => "items",
+                "parameters" => %{"query" => [%{"name" => "page", "schema" => %{"type" => "integer"}}]}
+              }
+            }
+          }
+        },
+        allow_normalized_parameters?: true
+      )
+
+    assert_raise Oasis.InvalidSpecError, ~r/Operation `get` parameters.*must be an array/, fn ->
+      Path.build(document)
+    end
+  end
+
+  test "rejects a non-map Operation Object with InvalidSpecError" do
+    for operation <- [nil, false, [], "not an object"] do
+      root = %{"paths" => %{"/hello" => %{"get" => operation}}}
+
+      assert_raise Oasis.InvalidSpecError,
+                   ~r/Operation Object for `get` in path `\/hello` must be an object/,
+                   fn ->
+                     Path.build(root)
+                   end
+    end
+  end
+
   test "unsupport trace http verb" do
     yaml_str = """
       paths:
@@ -483,14 +692,28 @@ defmodule Oasis.Spec.PathTest do
                 schema:
                   $ref: '#/components/schemas/RefreshTokenForm'
     """
-    %{schema: schema} = yaml_to_json_schema(yaml_str) |> Utils.expand_ref() |> Path.build()
+    %{schema: schema} = yaml_to_json_schema(yaml_str) |> OpenAPIRefResolver.resolve() |> Path.build()
     components = schema["components"]
     content_schema = get_in(components, ["requestBodies", "RefreshTokenForm", "content", "application/json", "schema"])
-    assert content_schema["type"] == "object" and content_schema["required"] == ["refresh_token"]
+    assert content_schema == %{"$ref" => "#/components/schemas/RefreshTokenForm"}
 
     paths = schema["paths"]
     content_schema = get_in(paths, ["/refresh", "post", "requestBody", "content", "application/json", "schema"])
-    assert content_schema["type"] == "object" and content_schema["required"] == ["refresh_token"]
+    assert content_schema == %{"$ref" => "#/components/schemas/RefreshTokenForm"}
+
+    {:ok, bundled} =
+      JSONSchex.bundle_fragment(schema,
+        entry: "#/paths/~1refresh/post/requestBody/content/application~1json/schema"
+      )
+
+    assert {:ok, compiled} =
+             JSONSchex.compile(bundled,
+               format_assertion: true,
+               content_assertion: false
+             )
+
+    assert JSONSchex.validate(compiled, %{"refresh_token" => "token"}) == :ok
+    assert {:error, _} = JSONSchex.validate(compiled, %{})
   end
 
   test "security bearer auth in global" do
@@ -564,7 +787,7 @@ defmodule Oasis.Spec.PathTest do
               - username
     """
 
-    %{schema: schema} = yaml_to_json_schema(yaml_str) |> Utils.expand_ref() |> Path.build()
+    %{schema: schema} = yaml_to_json_schema(yaml_str) |> OpenAPIRefResolver.resolve() |> Path.build()
 
     security_schemes = Oasis.Spec.Security.security_schemes(schema)
 

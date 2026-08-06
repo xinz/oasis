@@ -71,8 +71,26 @@ defmodule Oasis.Token do
 
   @type opts :: Plug.opts()
 
-  @type verify_error :: {:error, :expired}
-                      | {:error, :invalid}
+  @typedoc """
+  String status code used in `verify_error()`.
+
+  Allowed values are:
+
+  - `"expired"`
+  - `"invalid"`
+  - `"missing"`
+
+  Elixir typespecs cannot enumerate string literals directly, so this remains
+  `String.t()` at the type level and the fixed set is documented here.
+  """
+  @type verify_error_status :: String.t()
+
+  @typedoc """
+  Structured verification error returned by `verify/2` and `decrypt/2`.
+
+  The second tuple element is a fixed string status code rather than an atom.
+  """
+  @type verify_error :: {:error, verify_error_status()}
 
   @doc """
   Avoid using the application enviroment as the configuration mechanism for this library,
@@ -130,16 +148,25 @@ defmodule Oasis.Token do
   @doc """
   A wrapper of `Plug.Crypto.verify/4` to use `#{inspect(__MODULE__)}.Crypto` to decode the original
   data from the token and verify its integrity, please see `Plug.Crypto.verify/4` for details.
+
+  Error statuses are normalized to strings (`"expired"`, `"invalid"`) for
+  Oasis's public callback contract.
   """
-  @spec verify(crypto :: Crypto.t(), token :: String.t()) :: {:ok, term()} | {:error, term()}
-  def verify(%Crypto{secret_key_base: secret_key_base, salt: salt} = crypto, token) 
+  @spec verify(crypto :: Crypto.t(), token :: String.t()) :: {:ok, term()} | verify_error()
+  def verify(%Crypto{secret_key_base: secret_key_base, salt: salt} = crypto, token)
       when is_key_base(secret_key_base) do
-    Plug.Crypto.verify(
-      secret_key_base,
-      salt,
-      token,
-      to_decrypt_opts(crypto)
-    )
+    case Plug.Crypto.verify(
+           secret_key_base,
+           salt,
+           token,
+           to_decrypt_opts(crypto)
+         ) do
+      {:ok, _} = ok ->
+        ok
+
+      {:error, reason} ->
+        {:error, normalize_verify_error_status(reason)}
+    end
   end
 
   @doc """
@@ -160,15 +187,25 @@ defmodule Oasis.Token do
   @doc """
   A wrapper of `Plug.Crypto.decrypt/4` to use `#{inspect(__MODULE__)}.Crypto` to decrypt the original data
   from the token and verify its integrity, please see `Plug.Crypto.decrypt/4` for details.
+
+  Error statuses are normalized to strings (`"expired"`, `"invalid"`) for
+  Oasis's public callback contract.
   """
+  @spec decrypt(crypto :: Crypto.t(), token :: String.t()) :: {:ok, term()} | verify_error()
   def decrypt(%Crypto{secret_key_base: secret_key_base, secret: secret} = crypto, token)
       when is_key_base(secret_key_base) do
-    Plug.Crypto.decrypt(
-      secret_key_base,
-      secret,
-      token,
-      to_decrypt_opts(crypto)
-    )
+    case Plug.Crypto.decrypt(
+           secret_key_base,
+           secret,
+           token,
+           to_decrypt_opts(crypto)
+         ) do
+      {:ok, _} = ok ->
+        ok
+
+      {:error, reason} ->
+        {:error, normalize_verify_error_status(reason)}
+    end
   end
 
   defp to_encrypt_opts(%Crypto{} = crypto) do
@@ -183,7 +220,11 @@ defmodule Oasis.Token do
     |> Enum.filter(&filter_nil_opt/1)
   end
 
+  defp normalize_verify_error_status(:expired), do: "expired"
+  defp normalize_verify_error_status(:invalid), do: "invalid"
+  defp normalize_verify_error_status(:missing), do: "missing"
+
   defp filter_nil_opt({_, value}) when value != nil, do: true
-  defp filter_nil_opt(_), do: false 
+  defp filter_nil_opt(_), do: false
 
 end

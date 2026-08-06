@@ -50,10 +50,22 @@ defmodule Oasis.Plug.BearerAuthTest do
         {:ok, 1} ->
           verified
         _ ->
-          {:error, :invalid}
+          {:error, "invalid"}
       end
     end
 
+  end
+
+  defmodule BearerAuthWithExpiredStatus do
+    @behaviour Oasis.Token
+
+    @impl true
+    def crypto_config(conn, opts) do
+      Oasis.Plug.BearerAuthTest.BearerAuth.crypto_config(conn, opts)
+    end
+
+    @impl true
+    def verify(_conn, _token, _opts), do: {:error, "expired"}
   end
 
   describe "bearer_auth" do
@@ -116,6 +128,17 @@ defmodule Oasis.Plug.BearerAuthTest do
         conn(:get, "/expired")
         |> put_req_header("authorization", "Bearer #{token}")
         |> bearer_auth(security: BearerAuth)
+      end
+    end
+
+    test "handles the expired string status from custom callbacks" do
+      crypto = BearerAuth.crypto_config(%Conn{}, [])
+      token = sign(crypto, 123)
+
+      assert_raise Oasis.BadRequestError, ~r/the bearer token is expired/, fn ->
+        conn(:get, "/")
+        |> put_req_header("authorization", "Bearer #{token}")
+        |> bearer_auth(security: BearerAuthWithExpiredStatus)
       end
     end
 

@@ -37,12 +37,26 @@ defmodule Oasis do
       defstruct([])
     end
 
-    defmodule JsonSchemaValidationFailed do
+    defmodule JSONSchemaValidationFailed do
       @moduledoc """
-      This error is used to indicate could not pass the validation of the defined json schema.
+      Indicates that a request input failed JSON Schema validation.
 
-      This module is an equivalent replacement to `ExJsonSchema.Validator.Error`, we could see more detailed information
-      in the `:error` field be with `"ExJsonSchema.Validator.Error.*"` modules.
+      This struct wraps the underlying `JSONSchex.Types.Error` so detailed
+      validation context is available to custom error handlers.
+
+      ## Fields
+
+      - `:error` - the underlying `t:JSONSchex.Types.Error.t/0`.
+      - `:path` - a URI-fragment JSON Pointer addressing the offending value
+        inside the request payload, e.g. `"#/name"`. Pointer segments use RFC
+        6901 escaping (`~` → `~0`, `/` → `~1`) followed by URI percent-encoding.
+
+      Generated Oasis modules do not embed OpenAPI source metadata at runtime;
+      the route/parameter context that produced this error is already available
+      from `t:Plug.Conn.t/0` (`method`, `request_path`, `path_info`, headers) plus
+      the surrounding `Oasis.BadRequestError`'s `:use_in` and `:param_name`
+      fields. For generation-time source locations into the OpenAPI document,
+      see `Mix.Oasis.Router`'s `:source_meta` field.
       """
       defstruct [:error, :path]
     end
@@ -57,12 +71,26 @@ defmodule Oasis do
   end
 
   defmodule CacheRawBodyReader do
-    @moduledoc false
+    @moduledoc """
+    A `Plug.Parsers` body reader that preserves the raw request body.
+
+    Oasis uses the cached bytes to distinguish Plug's `_json` wrapper for a
+    primitive JSON root from a literal JSON object whose property is named
+    `_json`. Generated routers configure this reader automatically. Handwritten
+    pipelines that validate primitive JSON request bodies should pass
+    `{Oasis.CacheRawBodyReader, :read_body, []}` as `Plug.Parsers`'s
+    `:body_reader` option.
+    """
 
     def read_body(conn, opts) do
-      {:ok, body, conn} = Plug.Conn.read_body(conn, opts)
-      conn = update_in(conn.assigns[:raw_body], &[body | &1 || []])
-      {:ok, body, conn}
+      case Plug.Conn.read_body(conn, opts) do
+        {status, body, conn} when status in [:ok, :more] ->
+          conn = update_in(conn.assigns[:raw_body], &[body | &1 || []])
+          {status, body, conn}
+
+        {:error, _reason} = error ->
+          error
+      end
     end
   end
 

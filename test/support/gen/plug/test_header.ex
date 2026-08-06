@@ -14,8 +14,9 @@ defmodule Oasis.Gen.Plug.TestHeader do
     end
   end
 
-  def handle_errors(conn, %{kind: _kind, reason: %BadRequestError{error: %BadRequestError.JsonSchemaValidationFailed{} = json_schema} = reason, stack: _stack}) do
-    message = "Find #{reason.use_in} parameter `#{reason.param_name}` with error: #{to_string(json_schema.error)}"
+  def handle_errors(conn, %{kind: _kind, reason: %BadRequestError{error: %BadRequestError.JSONSchemaValidationFailed{} = _json_schema} = reason, stack: _stack}) do
+    message = String.replace_prefix(reason.message, "Failed to validate JSON schema with an error: ", "")
+    message = "Find #{reason.use_in} parameter `#{reason.param_name}` with error: #{message}"
     send_resp(conn, conn.status, message)
   end
   def handle_errors(conn, %{kind: _kind, reason: reason, stack: _stack}) do

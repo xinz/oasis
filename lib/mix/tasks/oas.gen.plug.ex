@@ -45,11 +45,15 @@ defmodule Mix.Tasks.Oas.Gen.Plug do
   end
 
   defp build(opts) do
-    %ExJsonSchema.Schema.Root{schema: schema} = Oasis.Spec.read(opts[:file])
+    document =
+      case Oasis.Spec.read(opts[:file]) do
+        %Oasis.Spec.Document{} = document -> document
+        {:error, error} -> raise error
+      end
 
     opts = Keyword.take(opts, [:router, :name_space, :body_reader])
 
-    Mix.Oasis.new(schema, opts)
+    Mix.Oasis.new(document, opts)
   end
 
   defp parse_opts(args) do
@@ -71,6 +75,7 @@ defmodule Mix.Tasks.Oas.Gen.Plug do
     end
   end
 
+  @spec raise_with_help(String.t()) :: no_return()
   defp raise_with_help(msg) do
     Mix.raise("""
     #{msg}

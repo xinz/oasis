@@ -1,7 +1,6 @@
 # Oasis
 
 [![hex.pm version](https://img.shields.io/hexpm/v/oasis.svg?v=1)](https://hex.pm/packages/oasis)
-[![Coverage Status](https://coveralls.io/repos/github/elixir-oasis/oasis/badge.svg?branch=main)](https://coveralls.io/github/elixir-oasis/oasis?branch=main)
 
 ## Introduction
 
@@ -26,7 +25,7 @@ Add `oasis` as a dependency to your mix.exs
 ```elixir
 def deps do
   [
-    {:oasis, "~> 0.6"}
+    {:oasis, "~> 0.7.0"}
   ]
 end
 ```
@@ -169,6 +168,44 @@ The arguments of `oas.gen.plug` mix task:
 * `--file`, required, the completed path to the specification file in YAML or JSON format.
 * `--router`, optional, the generated router's module alias, by default it is `Router` (the full module name is `Oasis.Gen.Router` by default), for example we set `--router Hello.MyRouter` meanwhile there is no other special name space defined, the final router module is `Oasis.Gen.Hello.MyRouter` in `/lib/oasis/gen/hello/my_router.ex` path.
 * `--name-space`, optional, the generated all modules' name space, by default it is `Oasis.Gen`, this argument will always override the name space from the input `--file` if any `"x-oasis-name-space"` field(s) defined.
+
+### JSON Schema and `$ref` handling
+
+Oasis uses `jsonschex` for JSON Schema Draft 2020-12 compilation and validation.
+Generated validators embed schemas with `JSONSchex.Schema.compile!/2`.
+
+Oasis distinguishes OpenAPI Reference Objects from JSON Schema `$ref` keywords:
+
+* OpenAPI Reference Objects needed for generation, such as Path Item, Parameter, Request Body, and Response refs, are resolved before router generation.
+* Schema Object `$ref` values are preserved and resolved by `jsonschex` through `JSONSchex.bundle_fragment/2`; generated modules then compile the bundled standalone schema with `JSONSchex.Schema.compile!/2`.
+
+This means external shared schema files and recursive schemas are handled by `jsonschex`, while Oasis keeps OpenAPI-specific traversal and code generation local to Oasis.
+
+Library callers can use `Mix.Oasis.new/2` to obtain the generation plan and pass a custom JSONSchex-compatible `:loader` when they need non-default file lookup or in-memory resources. The mix task keeps the default local YAML/JSON loader and does not expose custom loader configuration.
+
+#### Bundled schema shape
+
+The schemas embedded in generated `pre_*.ex` modules are the standalone bundles returned by `JSONSchex.bundle_fragment/2`. Oasis preserves those bundles verbatim rather than curating JSON Schema keywords or stripping OpenAPI keys.
+
+A bundle may therefore contain `$defs`, `components`, custom vocabulary keywords, OpenAPI annotations, or other containing-document context. JSONSchex guarantees that reachable references can compile without the original source loader; it does not guarantee a byte-minimal output shape. Applications should depend on schema behavior rather than the presence or absence of incidental top-level keys.
+
+#### Generation-time vs. runtime source metadata
+
+OpenAPI source locations (path, HTTP verb, parameter location/name, content type) are exposed **at generation time** on the public `:source_meta` field of `%Mix.Oasis.Router{}`. They are *not* embedded into generated runtime modules — the runtime stays small and Plug-native.
+
+For runtime error handling, `Oasis.BadRequestError` carries `:use_in` and `:param_name`, and its `:error` field will be an `%Oasis.BadRequestError.JSONSchemaValidationFailed{}` whenever the failure originated from JSON Schema validation. That struct exposes the underlying `%JSONSchex.Types.Error{}` plus a URI-fragment JSON Pointer (`:path`) into the offending payload:
+
+```elixir
+def handle_errors(conn, %{reason: %Oasis.BadRequestError{
+      error: %Oasis.BadRequestError.JSONSchemaValidationFailed{path: pointer},
+      use_in: use_in,
+      param_name: param_name
+    }}) do
+  send_resp(conn, 400, "#{use_in} parameter `#{param_name}` failed validation at #{pointer}")
+end
+```
+
+See `guides/handle_errors.md` for the full pattern.
 
 ### Special instructions
 

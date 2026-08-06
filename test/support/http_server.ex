@@ -1,15 +1,8 @@
 defmodule Oasis.HTTPServer do
-  @moduledoc false
-
+    @moduledoc false
   def start(port) do
     children = [
-      Plug.Cowboy.child_spec(
-        scheme: :http,
-        plug: __MODULE__.PlugRouter,
-        options: [
-          port: port
-        ]
-      )
+      Plug.Cowboy.child_spec(scheme: :http, plug: __MODULE__.PlugRouter, options: [port: port])
     ]
 
     Supervisor.start_link(children, strategy: :one_for_one)
@@ -17,28 +10,25 @@ defmodule Oasis.HTTPServer do
 end
 
 defmodule Oasis.HTTPServer.PlugRouter do
-  @moduledoc false
-
+    @moduledoc false
   use Oasis.Router
-
   plug(:match)
-
   plug(:dispatch)
 
-  get "/hello" do
+  get("/hello") do
     send_resp(conn, 200, "world")
   end
 
-  get "/id/:id",
+  get("/id/:id",
     private: %{
       path_schema: %{
         "id" => %{
-          "schema" => %ExJsonSchema.Schema.Root{
-            schema: %{"type" => "integer"}
-          }
+          "schema" =>
+            Oasis.Test.JSONSchema.compile!(%{"type" => "integer"})
         }
       }
-    } do
+    }
+  ) do
     conn = fetch_query_params(conn)
 
     conn
@@ -50,69 +40,27 @@ defmodule Oasis.HTTPServer.PlugRouter do
     private: %{
       path_schema: %{
         "id" => %{
-          "schema" => %ExJsonSchema.Schema.Root{
-            schema: %{"type" => "integer"}
-          }
+          "schema" =>
+            Oasis.Test.JSONSchema.compile!(%{"type" => "integer"})
         }
       }
     },
     to: Oasis.Gen.Plug.PreTestQuery
   )
 
-  get("/test_header",
-    to: Oasis.Gen.Plug.PreTestHeader
-  )
-
-  get("/test_cookie",
-    to: Oasis.Gen.Plug.PreTestCookie
-  )
-
-  post("/test_post_urlencoded",
-    to: Oasis.Gen.Plug.PreTestPostUrlencoded
-  )
-
-  post("/test_post_multipart",
-    to: Oasis.Gen.Plug.PreTestPostMultipart
-  )
-
-  post("/test_post_json",
-    to: Oasis.Gen.Plug.PreTestPostJSON
-  )
-
-  post("/test_post_non_validate",
-    to: Oasis.Gen.Plug.TestPostNonValidate
-  )
-
-  delete("/test_delete",
-    to: Oasis.Gen.Plug.PreTestDelete
-  )
-
-  get("/bearer_auth",
-    to: Oasis.Gen.Plug.PreTestBearerAuth
-  )
-
-  post("/sign_bearer_auth",
-    to: Oasis.Gen.Plug.PreTestSignBearerAuth
-  )
-
-  post("/test_files_upload",
-    to: Oasis.Gen.Plug.PreTestFilesUpload
-  )
-
-  get(
-    "/test_hmac_host_only",
-    to: Oasis.Gen.Plug.PreGetTestHMACHostOnly
-  )
-
-  post(
-    "/test_hmac_with_body",
-    to: Oasis.Gen.Plug.PrePostTestHMACWithBody
-  )
-
-  get(
-    "/test_hmac_with_date",
-    to: Oasis.Gen.Plug.PreGetTestHMACWithDate
-  )
+  get("/test_header", to: Oasis.Gen.Plug.PreTestHeader)
+  get("/test_cookie", to: Oasis.Gen.Plug.PreTestCookie)
+  post("/test_post_urlencoded", to: Oasis.Gen.Plug.PreTestPostUrlencoded)
+  post("/test_post_multipart", to: Oasis.Gen.Plug.PreTestPostMultipart)
+  post("/test_post_json", to: Oasis.Gen.Plug.PreTestPostJSON)
+  post("/test_post_non_validate", to: Oasis.Gen.Plug.TestPostNonValidate)
+  delete("/test_delete", to: Oasis.Gen.Plug.PreTestDelete)
+  get("/bearer_auth", to: Oasis.Gen.Plug.PreTestBearerAuth)
+  post("/sign_bearer_auth", to: Oasis.Gen.Plug.PreTestSignBearerAuth)
+  post("/test_files_upload", to: Oasis.Gen.Plug.PreTestFilesUpload)
+  get("/test_hmac_host_only", to: Oasis.Gen.Plug.PreGetTestHMACHostOnly)
+  post("/test_hmac_with_body", to: Oasis.Gen.Plug.PrePostTestHMACWithBody)
+  get("/test_hmac_with_date", to: Oasis.Gen.Plug.PreGetTestHMACWithDate)
 
   def handle_errors(conn, %{kind: _kind, reason: reason, stack: _stack}) do
     message = Map.get(reason, :message) || "Something went wrong"

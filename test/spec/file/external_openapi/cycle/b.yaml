@@ -1,0 +1,2 @@
+cyclePath:
+  $ref: './a.yaml#/cyclePath'

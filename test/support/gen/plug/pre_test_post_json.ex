@@ -1,66 +1,75 @@
 defmodule Oasis.Gen.Plug.PreTestPostJSON do
+  # NOTICE: Please DO NOT write any business code in this module, since it will always be overridden when
+  # run `mix oas.gen.plug` task command with the OpenAPI Specification file.
   use Oasis.Controller
   use Plug.ErrorHandler
+  require JSONSchex.Schema
 
-  plug(
-    Plug.Parsers,
+  plug(Plug.Parsers,
     parsers: [:json],
     json_decoder: Jason,
-    pass: ["*/*"]
+    pass: ["*/*"],
+    body_reader: {Oasis.CacheRawBodyReader, :read_body, []}
   )
 
-  plug(
-    Oasis.Plug.RequestValidator,
+  plug(Oasis.Plug.RequestValidator,
     body_schema: %{
       "required" => true,
       "content" => %{
         "application/json" => %{
-          "schema" => %ExJsonSchema.Schema.Root{
-            schema: %{
-              "items" => %{
-                "type" => "object",
-                "properties" => %{
-                  "id" => %{"type" => "integer"},
-                  "name" => %{"type" => "string"}
-                },
-                "required" => ["id", "name"],
-              },
-              "type" => "array"
-            }
-          }
-        },
-        "application/vnd.api-v1+json" => %{
-          "schema" => %ExJsonSchema.Schema.Root{
-            schema: %{
-              "type" => "integer"
-            }
-          }
-        },
-        "application/vnd.api-v2+json" => %{
-          "schema" => %ExJsonSchema.Schema.Root{
-            schema: %{
-              "type" => "number"
-            }
-          }
-        },
-        "application/vnd.api-v3+json" => %{
-          "schema" => %ExJsonSchema.Schema.Root{
-            schema: %{
-              "properties" => %{
-                "_json" => %{
+          "schema" =>
+            JSONSchex.Schema.compile!(
+              %{
+                "items" => %{
                   "type" => "object",
                   "properties" => %{
-                    "street_name" => %{"type" => "string"},
-                    "street_type" => %{"enum" => ["Street", "Avenue", "Boulevard"]},
-                    "id" => %{"type" => "integer"}
-                  }
-                }
+                    "id" => %{"type" => "integer"},
+                    "name" => %{"type" => "string"}
+                  },
+                  "required" => ["id", "name"]
+                },
+                "type" => "array"
               },
-              "type" => "object"
-            }
-          }
+              format_assertion: true,
+              content_assertion: false
+            )
         },
-
+        "application/vnd.api-v1+json" => %{
+          "schema" =>
+            JSONSchex.Schema.compile!(
+              %{"type" => "integer"},
+              format_assertion: true,
+              content_assertion: false
+            )
+        },
+        "application/vnd.api-v2+json" => %{
+          "schema" =>
+            JSONSchex.Schema.compile!(
+              %{"type" => "number"},
+              format_assertion: true,
+              content_assertion: false
+            )
+        },
+        "application/vnd.api-v3+json" => %{
+          "schema" =>
+            JSONSchex.Schema.compile!(
+              %{
+                "properties" => %{
+                  "_json" => %{
+                    "type" => "object",
+                    "properties" => %{
+                      "street_name" => %{"type" => "string"},
+                      "street_type" => %{"enum" => ["Street", "Avenue", "Boulevard"]},
+                      "id" => %{"type" => "integer"}
+                    }
+                  }
+                },
+                "type" => "object"
+              },
+              format_assertion: true,
+              content_assertion: false
+            )
+        }
       }
     }
   )
@@ -70,5 +79,4 @@ defmodule Oasis.Gen.Plug.PreTestPostJSON do
   end
 
   defdelegate handle_errors(conn, error), to: Oasis.Gen.Plug.TestPost
-
 end

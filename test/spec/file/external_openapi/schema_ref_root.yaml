@@ -1,0 +1,11 @@
+paths:
+  /users/{id}:
+    get:
+      operationId: getUser
+      parameters:
+        - $ref: './schema_ref_common.yaml#/components/parameters/UserId'
+  /profiles:
+    post:
+      operationId: createProfile
+      requestBody:
+        $ref: './schema_ref_common.yaml#/components/requestBodies/ProfileBody'

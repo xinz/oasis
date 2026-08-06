@@ -1,37 +1,48 @@
 defmodule Oasis.Gen.Plug.PreTestQuery do
+  # NOTICE: Please DO NOT write any business code in this module, since it will always be overridden when
+  # run `mix oas.gen.plug` task command with the OpenAPI Specification file.
   use Oasis.Controller
   use Plug.ErrorHandler
+  require JSONSchex.Schema
 
-  plug(
-    Oasis.Plug.RequestValidator,
+  plug(Oasis.Plug.RequestValidator,
     query_schema: %{
       "profile" => %{
         "content" => %{
           "application/json" => %{
-            "schema" => %ExJsonSchema.Schema.Root{
-              schema: %{
-                "properties" => %{
-                  "name" => %{"type" => "string"},
-                  "tag" => %{"type" => "integer"}
+            "schema" =>
+              JSONSchex.Schema.compile!(
+                %{
+                  "properties" => %{
+                    "name" => %{"type" => "string"},
+                    "tag" => %{"type" => "integer"}
+                  },
+                  "required" => ["name", "tag"],
+                  "type" => "object"
                 },
-                "required" => ["name", "tag"],
-                "type" => "object"
-              }
-            }
+                format_assertion: true,
+                content_assertion: false
+              )
           }
         },
         "required" => false
       },
       "lang" => %{
-        "schema" => %ExJsonSchema.Schema.Root{
-          schema: %{"type" => "integer", "minimum" => 10, "maximum" => 20}
-        },
+        "schema" =>
+          JSONSchex.Schema.compile!(
+            %{"type" => "integer", "minimum" => 10, "maximum" => 20},
+            format_assertion: true,
+            content_assertion: false
+          ),
         "required" => true
       },
       "all" => %{
-        "schema" => %ExJsonSchema.Schema.Root{
-          schema: %{"type" => "boolean"}
-        },
+        "schema" =>
+          JSONSchex.Schema.compile!(
+            %{"type" => "boolean"},
+            format_assertion: true,
+            content_assertion: false
+          ),
         "required" => false
       }
     }
@@ -42,5 +53,4 @@ defmodule Oasis.Gen.Plug.PreTestQuery do
   end
 
   defdelegate handle_errors(conn, error), to: Oasis.Gen.Plug.TestQuery
-
 end

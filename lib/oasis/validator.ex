@@ -9,31 +9,33 @@ defmodule Oasis.Validator do
           name :: String.t(),
           value :: term()
         ) :: term()
-  def parse_and_validate!(%{"schema" => _schema} = definition, use_in, name, value) do
+  def parse_and_validate!(definition, use_in, name, value) do
+    parse_and_validate!(definition, use_in, name, value, present?: value != nil)
+  end
+
+  @doc false
+  @spec parse_and_validate!(
+          param :: map() | nil,
+          use_in :: String.t(),
+          name :: String.t(),
+          value :: term(),
+          opts :: keyword()
+        ) :: term()
+  def parse_and_validate!(%{"schema" => _schema} = definition, use_in, name, value, opts) do
     definition
-    |> prepare()
-    |> check_required!(use_in, name, value)
+    |> check_required!(use_in, name, value, Keyword.get(opts, :present?, value != nil))
     |> process()
   end
 
-  def parse_and_validate!(%{"content" => _content} = definition, use_in, name, value) do
+  def parse_and_validate!(%{"content" => _content} = definition, use_in, name, value, opts) do
     definition
-    |> prepare()
-    |> check_required!(use_in, name, value)
+    |> check_required!(use_in, name, value, Keyword.get(opts, :present?, value != nil))
     |> process()
   end
 
-  def parse_and_validate!(_, _, _, value) do
-    value
-  end
+  def parse_and_validate!(_definition, _use_in, _name, value, _opts), do: value
 
-  defp prepare(definition) when is_map(definition) do
-    required = if definition["required"] == true, do: true, else: false
-
-    Map.put(definition, "required", required)
-  end
-
-  defp check_required!(%{"required" => true}, use_in, param_name, nil) do
+  defp check_required!(%{"required" => true}, use_in, param_name, _value, false) do
     raise BadRequestError,
       error: %BadRequestError.Required{},
       use_in: use_in,
@@ -41,40 +43,40 @@ defmodule Oasis.Validator do
       message: "Missing a required parameter"
   end
 
-  defp check_required!(definition, use_in, name, value) do
-    {definition, use_in, name, value}
+  defp check_required!(definition, use_in, name, value, present?) do
+    {definition, use_in, name, value, present?}
   end
 
-  defp process({_, _use_in, _name, nil}) do
-    nil
-  end
+  defp process({_definition, _use_in, _name, value, false}), do: value
 
-  defp process({%{"schema" => json_schema_root}, use_in, name, value}) do
+  defp process({%{"schema" => json_schema_root}, use_in, name, value, true}) do
     do_parse_and_validate!(json_schema_root, use_in, name, value)
   end
 
-  defp process({%{"content" => content}, use_in, name, value}) do
+  defp process({%{"content" => content}, use_in, name, value, true}) do
     [{content_type, media_type} | _] = Map.to_list(content)
-
-    content_type
-    |> String.downcase()
-    |> process_media_type(media_type, use_in, name, value)
+    process_media_type(content_type, media_type, use_in, name, value)
   end
 
-  defp do_parse_and_validate!(%{schema: %{"type" => type}} = json_schema_root, "body", param_name, %{"_json" => value})
-    when type == "string" and is_bitstring(value)
-    when type == "number" and is_number(value)
-    when type == "integer" and is_integer(value)
-    when type == "array" and is_list(value)
-    when type == "boolean" and is_boolean(value) do
-    # Since `Plug.Parsers.JSON` parses a non-map body content into a "_json" key to allow proper param merging, here
-    # will unwrap the "_json" key and format the input body params as a matched type to the defined OpenAPI specification.
-    do_parse_and_validate!(json_schema_root, "body", param_name, value)
+  defp do_parse_and_validate!(
+         %JSONSchex.Types.Schema{} = json_schema_root,
+         use_in,
+         param_name,
+         value,
+         opts \\ []
+       ) do
+    do_parse_and_validate_value!(json_schema_root, use_in, param_name, value, opts)
   end
 
-  defp do_parse_and_validate!(%{schema: schema} = json_schema_root, use_in, param_name, value) do
+  defp do_parse_and_validate_value!(
+         %JSONSchex.Types.Schema{} = json_schema_root,
+         use_in,
+         param_name,
+         value,
+         opts
+       ) do
     try do
-      Oasis.Parser.parse(schema, value)
+      Oasis.Parser.parse(json_schema_root, value)
     rescue
       ArgumentError ->
         raise BadRequestError,
@@ -85,128 +87,148 @@ defmodule Oasis.Validator do
 
     else
       parsed ->
-
         result =
-          json_schema_root
-          |> json_schema_validate(parsed)
-          |> recheck_after_validate()
+          if opts[:multipart_uploads?] == true do
+            Oasis.MultipartUpload.validate(json_schema_root, parsed)
+          else
+            Oasis.MultipartUpload.validate_non_multipart(json_schema_root, parsed)
+          end
 
         case result do
-          {:ok, ^parsed} ->
+          :ok ->
             parsed
-          {:error, %ExJsonSchema.Validator.Error{error: error, path: path}} ->
+
+          {:error, errors} ->
+            error = first_error!(errors)
+
             raise BadRequestError,
-              error: %BadRequestError.JsonSchemaValidationFailed{error: error, path: path},
+              error: %BadRequestError.JSONSchemaValidationFailed{error: error, path: path_pointer(error)},
               use_in: use_in,
               param_name: param_name,
-              message: "Failed to validate JSON schema with an error: #{to_string(error)}"
+              message: "Failed to validate JSON schema with an error: #{format_error(error)}"
         end
     end
   end
 
 
-  defp json_schema_validate(json_schema_root, parsed) do
-    {
-      ExJsonSchema.Validator.validate(json_schema_root, parsed, error_formatter: false),
-      parsed
-    }
+
+  defp first_error!([%JSONSchex.Types.Error{} | _] = errors) do
+    Enum.min_by(errors, fn error -> {root_first_path(error), error_priority(error.rule)} end)
   end
 
-  defp recheck_after_validate({:ok, parsed}), do: {:ok, parsed}
-  defp recheck_after_validate({{:error, errors}, parsed}) do
-    errors = Enum.filter(errors, fn %{error: error, path: path} ->
-      error_to_attention?(error, path, parsed)
-    end)
+  # JSONSchex stores validation paths leaf-first. Keep its error untouched for
+  # callers and derive a root-first path only for deterministic selection and
+  # public JSON Pointer rendering.
+  defp root_first_path(%JSONSchex.Types.Error{path: path}) do
+    path
+    |> List.wrap()
+    |> Enum.reverse()
+  end
 
-    case errors do
-      [] ->
-        {:ok, parsed}
-      [error | _] ->
-        {:error, error}
+  defp error_priority(:type), do: 0
+  defp error_priority(:required), do: 1
+  defp error_priority(:dependentRequired), do: 1
+  defp error_priority(_rule), do: 9
+
+  defp format_error(%JSONSchex.Types.Error{rule: :minimum, context: %{contrast: minimum}}) do
+    "Expected the value to be >= #{minimum}"
+  end
+
+  defp format_error(%JSONSchex.Types.Error{rule: :maximum, context: %{contrast: maximum}}) do
+    "Expected the value to be <= #{maximum}"
+  end
+
+  defp format_error(%JSONSchex.Types.Error{rule: :minLength, context: %{contrast: minimum, input: actual}}) do
+    "Expected value to have a minimum length of #{minimum} but was #{actual}"
+  end
+
+  defp format_error(%JSONSchex.Types.Error{rule: :maxLength, context: %{contrast: maximum, input: actual}}) do
+    "Expected value to have a maximum length of #{maximum} but was #{actual}"
+  end
+
+  defp format_error(%JSONSchex.Types.Error{rule: :minItems, context: %{contrast: minimum, input: actual}}) do
+    "Expected a minimum of #{minimum} items but got #{actual}"
+  end
+
+  defp format_error(%JSONSchex.Types.Error{rule: :maxItems, context: %{contrast: maximum, input: actual}}) do
+    "Expected a maximum of #{maximum} items but got #{actual}"
+  end
+
+  defp format_error(%JSONSchex.Types.Error{rule: :uniqueItems}) do
+    "Expected items to be unique but they were not"
+  end
+
+  defp format_error(%JSONSchex.Types.Error{rule: :pattern}) do
+    "Does not match pattern"
+  end
+
+  defp format_error(%JSONSchex.Types.Error{rule: :enum}) do
+    "Value is not allowed in enum."
+  end
+
+  defp format_error(%JSONSchex.Types.Error{rule: :format, context: %{contrast: "email"}}) do
+    "Expected to be a valid email"
+  end
+
+  defp format_error(%JSONSchex.Types.Error{rule: :dependentRequired, context: %{input: property, contrast: [dependency]}}) do
+    "Property #{property} depends on property #{dependency} to be present but it was not"
+  end
+
+  defp format_error(%JSONSchex.Types.Error{rule: :required, context: %{contrast: [property]}}) do
+    "Required property #{property} was not present."
+  end
+
+  defp format_error(%JSONSchex.Types.Error{rule: :required, context: %{contrast: properties}}) when is_list(properties) do
+    "Required properties #{Enum.join(properties, ", ")} were not present."
+  end
+
+  defp format_error(%JSONSchex.Types.Error{rule: :type, context: %{contrast: expected, input: actual}}) do
+    "Type mismatch. Expected #{format_type(expected)} but got #{format_type(actual)}."
+  end
+
+  defp format_error(%JSONSchex.Types.Error{} = error) do
+    JSONSchex.format_error(error)
+  end
+
+  defp format_type(types) when is_list(types) do
+    types
+    |> Enum.map(&format_type/1)
+    |> Enum.join(" or ")
+  end
+  defp format_type("integer"), do: "Integer"
+  defp format_type("number"), do: "Number"
+  defp format_type("string"), do: "String"
+  defp format_type("boolean"), do: "Boolean"
+  defp format_type("object"), do: "Object"
+  defp format_type("array"), do: "Array"
+  defp format_type("null"), do: "Null"
+  defp format_type(type), do: type |> to_string() |> String.capitalize()
+
+  defp path_pointer(%JSONSchex.Types.Error{} = error) do
+    error
+    |> root_first_path()
+    |> ExJSONPointer.encode_path(format: "uri_fragment")
+  end
+
+  defp process_media_type(
+         content_type,
+         %{"schema" => json_schema_root},
+         use_in,
+         name,
+         value
+       ) do
+    case Oasis.MediaType.validation_kind(content_type) do
+      :multipart ->
+        do_parse_and_validate!(json_schema_root, use_in, name, value, multipart_uploads?: true)
+
+      kind when kind in [:json, :form, :text] ->
+        do_parse_and_validate!(json_schema_root, use_in, name, value)
+
+      :unsupported ->
+        value
     end
   end
 
-  defp error_to_attention?(%ExJsonSchema.Validator.Error.Type{actual: "object", expected: ["string"]}, path, parsed) do
-    case value_in_path(path, parsed) do
-      %Plug.Upload{} ->
-        # ignore `Plug.Upload` failed in json schema validation
-        false
-      _ ->
-        true
-    end
-  end
-  defp error_to_attention?(_error, _path, _parsed), do: true
-
-  defp value_in_path("#/" <> path, parsed) when is_map(parsed) do
-    get_in(parsed, String.split(path, "/"))
-  end
-
-  defp process_media_type(
-         "text/plain" <> _charset,
-         %{"schema" => json_schema_root},
-         use_in,
-         name,
-         value
-       ) do
-    do_parse_and_validate!(json_schema_root, use_in, name, value)
-  end
-
-  defp process_media_type(
-         "application/json" <> _charset,
-         %{"schema" => json_schema_root},
-         use_in,
-         name,
-         value
-       ) do
-    do_parse_and_validate!(json_schema_root, use_in, name, value)
-  end
-
-  defp process_media_type(
-         "application/x-www-form-urlencoded" <> _charset,
-         %{"schema" => json_schema_root},
-         use_in,
-         name,
-         value
-       ) do
-    do_parse_and_validate!(json_schema_root, use_in, name, value)
-  end
-
-  defp process_media_type(
-         "multipart/form-data" <> _boundary,
-         %{"schema" => json_schema_root},
-         use_in,
-         name,
-         value
-       ) do
-    do_parse_and_validate!(json_schema_root, use_in, name, value)
-  end
-
-  defp process_media_type(
-         "multipart/mixed" <> _boundary,
-         %{"schema" => json_schema_root},
-         use_in,
-         name,
-         value
-       ) do
-    do_parse_and_validate!(json_schema_root, use_in, name, value)
-  end
-
-  defp process_media_type(
-         "application/" <> subtype,
-         %{"schema" => json_schema_root},
-         use_in,
-         name,
-         value
-       ) do
-    if String.ends_with?(subtype, "+json") do
-      do_parse_and_validate!(json_schema_root, use_in, name, value)
-    else
-      value
-    end
-  end
-
-  defp process_media_type(_content_type, _schema, _use_in, _name, value) do
-    value
-  end
+  defp process_media_type(_content_type, _schema, _use_in, _name, value), do: value
 
 end

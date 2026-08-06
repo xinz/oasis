@@ -455,6 +455,34 @@ defmodule Oasis.ParserTest do
     end
   end
 
+  test "parse compiled schema follows a local $ref inside a nested $id resource" do
+    raw = %{
+      "$id" => "https://example.test/root.json",
+      "$defs" => %{
+        "scoped" => %{
+          "$id" => "scope/",
+          "$defs" => %{
+            "value" => %{"type" => "integer"}
+          },
+          "type" => "object",
+          "properties" => %{
+            "value" => %{"$ref" => "#/$defs/value"}
+          }
+        }
+      },
+      "$ref" => "scope/"
+    }
+
+    assert {:ok, compiled} = JSONSchex.compile(raw)
+    assert JSONSchex.validate(compiled, %{"value" => 7}) == :ok
+    assert {:error, _errors} = JSONSchex.validate(compiled, %{"value" => "7"})
+
+    parsed = parse(compiled, %{"value" => "7"})
+
+    assert parsed == %{"value" => 7}
+    assert JSONSchex.validate(compiled, parsed) == :ok
+  end
+
   test "parse file upload" do
     type = %{
       "properties" => %{"file" => %{"format" => "binary", "type" => "string"}},

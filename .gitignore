@@ -22,6 +22,9 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 oasis-*.tar
 
+# Editor and language-server build artifacts.
+/.elixir_ls/
+
 # Other
 *.swp
 .DS_Store

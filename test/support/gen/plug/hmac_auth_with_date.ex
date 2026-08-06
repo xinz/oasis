@@ -31,7 +31,7 @@ defmodule Oasis.Gen.HMACAuthWithDate do
       if abs(timestamp_now - timestamp) < @max_diff do
         {:ok, timestamp}
       else
-        {:error, :expired}
+        {:error, "expired"}
       end
     end
   end
@@ -52,5 +52,5 @@ defmodule Oasis.Gen.HMACAuthWithDate do
     end
   end
 
-  defp parse_header_date(_otherwise), do: {:error, :expired}
+  defp parse_header_date(_otherwise), do: {:error, "expired"}
 end

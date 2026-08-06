@@ -1,29 +1,34 @@
 defmodule Oasis.Gen.Plug.PreTestDelete do
+  # NOTICE: Please DO NOT write any business code in this module, since it will always be overridden when
+  # run `mix oas.gen.plug` task command with the OpenAPI Specification file.
   use Oasis.Controller
   use Plug.ErrorHandler
+  require JSONSchex.Schema
 
-  plug(
-    Plug.Parsers,
+  plug(Plug.Parsers,
     parsers: [:urlencoded],
-    pass: ["*/*"]
+    pass: ["*/*"],
+    body_reader: {Oasis.CacheRawBodyReader, :read_body, []}
   )
 
-  plug(
-    Oasis.Plug.RequestValidator,
+  plug(Oasis.Plug.RequestValidator,
     query_schema: %{
       "relation_ids" => %{
-        "schema" => %ExJsonSchema.Schema.Root{
-          schema: %{
-            "type" => "array",
-            "items" => %{"type" => "string"}
-          }
-        },
+        "schema" =>
+          JSONSchex.Schema.compile!(
+            %{"type" => "array", "items" => %{"type" => "string"}},
+            format_assertion: true,
+            content_assertion: false
+          ),
         "required" => false
       },
       "id" => %{
-        "schema" => %ExJsonSchema.Schema.Root{
-          schema: %{"type" => "integer"}
-        },
+        "schema" =>
+          JSONSchex.Schema.compile!(
+            %{"type" => "integer"},
+            format_assertion: true,
+            content_assertion: false
+          ),
         "required" => true
       }
     }
@@ -34,5 +39,4 @@ defmodule Oasis.Gen.Plug.PreTestDelete do
   end
 
   defdelegate handle_errors(conn, error), to: Oasis.Gen.Plug.TestDelete
-
 end

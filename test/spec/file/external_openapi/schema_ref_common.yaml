@@ -1,0 +1,18 @@
+components:
+  parameters:
+    UserId:
+      name: id
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/UserId'
+  requestBodies:
+    ProfileBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: './schemas/profile.yaml'
+  schemas:
+    UserId:
+      type: integer
