@@ -25,7 +25,7 @@ defmodule Oasis.MixProject do
   end
 
   defp description do
-    "An Elixir server implementation of OpenAPI Specification v3 within Plug"
+    "An Elixir/Plug OpenAPI v3 server implementation and code generator with JSON Schema validation"
   end
 
   # Run "mix help deps" to learn about dependencies.
@@ -57,7 +57,8 @@ defmodule Oasis.MixProject do
       ],
       licenses: ["MIT"],
       links: %{
-        "GitHub" => @source_url
+        "GitHub" => @source_url,
+        "Changelog" => "#{@source_url}/blob/main/CHANGELOG.md"
       }
     ]
   end
