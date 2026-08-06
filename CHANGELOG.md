@@ -1,24 +1,31 @@
 # Changelog
 
-## v0.7.0 (Unreleased)
+## v0.7.0 (2026-08-06)
 
-* Replace `ex_json_schema` with `jsonschex ~> 0.9.0` for JSON Schema Draft 2020-12 compilation and validation, reachable fragment bundling, and deep rebasing of unselected refs.
-* Resolve OpenAPI Reference Objects with `JSONSchex.Ref.resolve_selected/2` while preserving Schema Object `$ref`s for JSONSchex.
-* Add support coverage for external OpenAPI refs, external JSON Schema refs, recursive schemas, custom loaders, and schema diagnostics in generation. Complete generated handler, pre-plug, and router modules are compiled and executed for external and recursive schema fixtures.
-* Resolve local and external Security Scheme Reference Objects before generation and reject non-object structural Reference Object targets with source-aware `Oasis.InvalidSpecError` messages. Decoded-map generation is strict by default; callers using the legacy pre-grouped parameter shape must pass `normalized_parameters: true`.
-* Preserve request coercion when effective parameter, primitive-body, form, or multipart schema types are behind JSON Schema `$ref`s, including refs scoped beneath nested `$id` resources.
-* Distinguish an explicit JSON `null` and the empty JSON object `{}` from an absent request body using raw-body provenance, match parameterized `application/*+json` and wildcard media ranges using the actual request type, reject ambiguous/unmatched/unparsed bodies instead of skipping validation, and inject Plug's JSON parser for vendor-only JSON operations. Validated primitive roots remain under Plug's `_json` map key.
-* Preserve JSONSchex's native leaf-first error paths while deriving root-first URI-fragment JSON Pointers for Oasis error reporting, sorting, nested arrays, and uploaded files.
-* Use JSONSchex as the single authority for asserted JSON Schema formats.
-* Support single-entry Parameter Objects that use `content`, correct `prefixItems` coercion for short arrays and typed tails, and accept multipart uploads only for applicable explicit `binary`/`byte` string schemas, including nullable string unions. Overlapping object schemas, applicators, and active conditionals are evaluated fail-closed.
-* Generation-time schema preparation now always invokes `JSONSchex.bundle_fragment/2` with a resolved loader (defaults to `&Oasis.Spec.Document.load_external/1`). Callers can supply a custom loader via `:loader`, or pass `loader: nil` to explicitly disable external loading.
-* **Breaking:** rename the old `JsonSchemaValidationFailed` error suffix to `Oasis.BadRequestError.JSONSchemaValidationFailed`. Runtime route/parameter context is available from `Plug.Conn` plus the surrounding `Oasis.BadRequestError`'s `:use_in` / `:param_name` fields. For deep-links into the OpenAPI document, see `Mix.Oasis.Router`'s `:source_meta`.
-* **Breaking:** normalize token/auth verification error statuses to strings in public callbacks and token helpers. `Oasis.Token.verify/2`, `Oasis.Token.decrypt/2`, and `Oasis.HMACToken.verify/3` now return statuses such as `"expired"`, `"invalid"`, `"missing"`, and `"invalid_token"` instead of atoms. Plug adapters remain backward-compatible with existing custom callbacks that still return old atom statuses; generated and test callback implementations use the current string contract.
-* Document `Oasis.Spec.read/1` as the public ingestion API returning `%Oasis.Spec.Document{}` instead of the old `%ExJsonSchema.Schema.Root{}`, and clarify that `Mix.Oasis.Router.source_meta` identifies logical operation inputs rather than exact external ref targets.
+> **Breaking release.** Oasis 0.7 replaces its JSON Schema engine and changes
+> several public APIs [PR #3](https://github.com/xinz/oasis/pull/3). Read the [0.7 migration guide](guides/migrating_to_0_7.md)
+> before upgrading.
+
+### Breaking changes
+
+* **JSON Schema engine:** replace `ex_json_schema` with `jsonschex ~> 0.9.0` for JSON Schema Draft 2020-12 compilation and validation. `ex_json_schema` is removed, so checked-in generated modules containing `%ExJsonSchema.Schema.Root{}` must be regenerated before they compile.
+* **`Oasis.Spec.read/1`:** successful reads now return `%Oasis.Spec.Document{}` instead of `%ExJsonSchema.Schema.Root{}`. Handwritten integrations must use compiled `%JSONSchex.Types.Schema{}` values; `Oasis.Spec.Utils.expand_ref/1` is removed.
+* **Validation errors:** rename the `JsonSchemaValidationFailed` suffix to `Oasis.BadRequestError.JSONSchemaValidationFailed`.
+* **Token and authentication statuses:** public token helpers and generated callbacks return string statuses such as `"expired"`, `"invalid"`, `"missing"`, and `"invalid_token"` instead of atoms. Plug adapters continue to accept known legacy atom results from custom callbacks.
+* **Decoded-map generation:** raw OpenAPI maps are strict by default. Callers using Oasis's legacy pre-grouped parameter maps must explicitly pass `normalized_parameters: true` to `Mix.Oasis.new/2`.
+* **Handwritten JSON pipelines:** configure `Oasis.CacheRawBodyReader` as the `Plug.Parsers` body reader. Oasis now fails closed when it cannot distinguish primitive or empty JSON bodies from Plug's map-shaped representations.
+
+### Highlights
+
+* Resolve structural OpenAPI Reference Objects with `JSONSchex.Ref.resolve_selected/2` while preserving Schema Object `$ref`s for JSONSchex. Local and external Security Scheme refs are resolved before generation; invalid structural targets return source-aware `Oasis.InvalidSpecError` values.
+* Bundle reachable JSON Schema fragments with JSONSchex, including external resources, recursive schemas, custom loaders, and deep rebasing of unselected refs. Generation always uses one resolved loader call; callers may provide `:loader` or pass `loader: nil` to disable external loading.
+* Preserve HTTP coercion for parameter, primitive-body, form, and multipart schemas behind `$ref`s, including refs scoped beneath nested `$id` resources. JSONSchex remains the authority for final validation and asserted formats.
+* Distinguish explicit JSON `null` and `{}` from absent bodies through raw-body provenance; match parameterized `application/*+json` and wildcard media ranges; reject ambiguous, unmatched, and unparsed bodies instead of skipping validation. Primitive roots remain under Plug's `_json` map key.
+* Preserve JSONSchex's native leaf-first errors while deriving deterministic root-first URI-fragment JSON Pointers for Oasis error reporting, nested arrays, and uploaded files.
+* Support single-entry Parameter Objects using `content`, correct `prefixItems` coercion for short arrays and typed tails, and allow multipart uploads only through applicable explicit `binary`/`byte` string schemas. Overlapping schemas, applicators, and active conditionals are evaluated fail-closed.
+* Keep JSONSchex's standalone bundles verbatim, preserving custom vocabularies and OpenAPI Schema Object annotations. Generated support pre-plugs are reconciled with production templates, including JSONSchex macros, raw-body readers, notices, and `super(opts)` behavior.
 * Rewrite HMAC date examples with standard-library ISO 8601 parsing and update generated callback examples to use string statuses.
-* Reconcile overwriteable generated support pre-plugs with production templates, including JSONSchex macros, raw-body readers, notices, and `super(opts)` behavior.
-* Remove `ex_json_schema` as a (transitive) dependency.
-* See the [0.7 migration guide](guides/migrating_to_0_7.md) for generated-module regeneration and public API changes.
+* `Mix.Oasis.Router.source_meta` now documents logical operation/input identities rather than exact external-reference targets.
 
 ## v0.6.0 (2026-01-29)
 
