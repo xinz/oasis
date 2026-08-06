@@ -254,6 +254,32 @@ defmodule Oasis.Spec.OpenAPIRefResolverTest do
     end
   end
 
+  test "eagerly resolves response refs and rejects missing response targets" do
+    document = %{
+      "components" => %{
+        "responses" => %{"Ok" => %{"description" => "ok"}}
+      },
+      "paths" => %{
+        "/users" => %{
+          "get" => %{
+            "responses" => %{"200" => %{"$ref" => "#/components/responses/Ok"}}
+          }
+        }
+      }
+    }
+
+    assert get_in(OpenAPIRefResolver.resolve(document), ["paths", "/users", "get", "responses", "200"]) ==
+             %{"description" => "ok"}
+
+    missing = put_in(document, ["paths", "/users", "get", "responses", "200", "$ref"], "#/components/responses/Missing")
+
+    assert_raise Oasis.InvalidSpecError,
+                 ~r/Could not resolve OpenAPI ref.*#\/paths\/~1users\/get\/responses\/200/,
+                 fn ->
+                   OpenAPIRefResolver.resolve(missing)
+                 end
+  end
+
   test "preserves specification extensions in Responses Objects" do
     extension = %{"$ref" => "#/target", "note" => "metadata"}
 
