@@ -295,7 +295,9 @@ defmodule Mix.Oasis do
 
     case JSONSchex.bundle_fragment(root_spec, fragment_opts) do
       {:ok, bundled} ->
-        bundled
+        # A bundle embeds the complete root document and every reachable
+        # external document, keep only the parts the entry schema references.
+        Mix.Oasis.SchemaPruner.prune(bundled, root_spec)
 
       {:error, error} ->
         raise_json_schema_error!(error, opts, "bundle JSON Schema fragment")
